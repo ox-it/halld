@@ -1,0 +1,10 @@
+django-conneg
+django
+jsonfield
+rdflib
+-e git+git://github.com/RDFLib/rdflib-jsonld.git#egg=rdflib_jsonld
+psycopg2
+ujson
+gdal
+jsonpointer
+jsonpatch
