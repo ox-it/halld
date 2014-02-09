@@ -25,8 +25,6 @@ import ujson
 import rdflib
 from rdflib_jsonld.parser import to_rdf as parse_jsonld
 
-from .constants import RESOURCE_TYPE
-from .context import jsonld_context
 from . import exceptions
 from .models import Resource, Source, SourceData
 from .types import get_types
