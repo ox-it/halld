@@ -15,6 +15,7 @@ import rdflib
 import ujson as json
 from stalefields.stalefields import StaleFieldsMixin
 
+from . import signals
 from .links import get_links
 from .types import get_types
 
@@ -42,11 +43,7 @@ class Resource(models.Model, StaleFieldsMixin):
     point = models.PointField(null=True, blank=True)
     geometry = models.GeometryField(null=True, blank=True)
     
-    def regenerate(self, already_regenerated=None):
-        if not already_regenerated:
-            already_regenerated = set()
-        already_regenerated.add(self)
-
+    def regenerate(self):
         raw_data = {'@source': {},
                     'href': self.get_absolute_url()}
         for source_data in self.sourcedata_set.all():
@@ -61,26 +58,44 @@ class Resource(models.Model, StaleFieldsMixin):
             raw_data['@id'] = self.get_absolute_uri(raw_data)
         del raw_data['@source']
 
-        if raw_data == self.raw_data:
-            return
-        
-        self.raw_data = raw_data
+        self.raw_data = copy.deepcopy(raw_data)
 
-        self.uri = raw_data['@id']
-        self.deleted = bool(raw_data.get('@deleted', False))
-        self.extant = bool(raw_data.get('@extant', True))
-        self.created = self.created or datetime.datetime.utcnow()
-        self.modified = datetime.datetime.utcnow()
-        self.version += 1
+    def save(self, *args, **kwargs):
+        has_pk = self.pk is not None
+        self.rid = '{}/{}'.format(self.type, self.identifier)
+        if kwargs.pop('regenerate') is not False:
+            self.regenerate()
+        dirty_fields = self.get_stale_fields()
+        if 'raw_data' in dirty_fields:
+            cascade_to = self.update_data()
+            regenerated = kwargs.pop('regenerated', set())
+            cascade_to -= regenerated
 
+        dirty_fields = self.get_stale_fields()
+        if 'data' in dirty_fields:
+            self.created = self.created or datetime.datetime.utcnow()
+            self.modified = datetime.datetime.utcnow()
+            self.version += 1
+            super(Resource, self).save(*args, **kwargs)
+            if has_pk:
+                signals.resource_updated(self, dirty_fields['data'])
+            else:
+                signals.resource_created(self)
+
+            for resource in cascade_to:
+                resource.save(regenerated=regenerated)
+        elif self.is_stale():
+            super(Resource, self).save(*args, **kwargs)
+
+    def update_data(self, regenerated):
         cascade_to = set()
         cascade_to.update(l.target for l in Link.objects.filter(source=self).select_related('target'))
-        cascade_to.update(self.update_links(raw_data))
-        cascade_to -= already_regenerated
+        cascade_to.update(self.update_links(self.raw_data))
+        cascade_to -= regenerated
         
-        self.update_identifiers(raw_data)
+        self.update_identifiers(self.raw_data)
 
-        data = copy.deepcopy(raw_data)
+        data = copy.deepcopy(self.raw_data)
         for link in get_links().values():
             data.pop(link.name, None)
         data['meta'] = {'created': self.created,
@@ -88,24 +103,22 @@ class Resource(models.Model, StaleFieldsMixin):
                         'version': self.version}
         self.data = data
 
-        self.save()
+        return cascade_to
 
-        for resource in cascade_to:
-            resource.regenerate()
+    def update_denormalised_fields(self):
+        self.uri = self.raw_data['@id']
+        self.deleted = bool(self.raw_data.get('@deleted', False))
 
-    def save(self, *args, **kwargs):
-        self.rid = '{}/{}'.format(self.type, self.identifier)
-        super(Resource, self).save(*args, **kwargs)
 
     def get_inferences(self):
         return self.get_type().get_inferences()
-    
+
     def get_type(self):
         return get_types()[self.type]
-    
+
     def get_hal(self, user, data=None):
         return self.get_type().get_hal(user, self, data or self.data)
-    
+
     def get_jsonld(self, user, data):
         jsonld = self.get_hal(user, data)
         jsonld.update(jsonld.pop('_links', {}))
@@ -229,9 +242,17 @@ class SourceData(models.Model, StaleFieldsMixin):
         return reverse('halld:source-detail', args=[self.resource.type, self.resource.identifier, self.source_id])
 
     def save(self, *args, **kwargs):
-        self.version += 1
-        super(SourceData, self).save()
-        self.resource.regenerate()
+        stale_fields = self.get_stale_fields()
+        if 'data' in stale_fields:
+            self.version += 1
+            super(SourceData, self).save()
+            if not self.pk:
+                signals.sourcedata_created.send(self)
+            else:
+                signals.sourcedata_updated.send(self, old_data=stale_fields['data'])
+            self.resource.refresh()
+        elif self.is_stale():
+            super(SourceData, self).save()
 
 class Link(models.Model):
     source = models.ForeignKey(Resource, related_name='link_source')
@@ -245,3 +266,16 @@ class Identifier(models.Model, StaleFieldsMixin):
     resource = models.ForeignKey(Resource, related_name='identifiers')
     scheme = models.SlugField()
     value = models.SlugField()
+
+    def save(self, *args, **kwargs):
+        dirty_fields = self.get_stale_fields()
+        super(Identifier, self).save(*args, **kwargs)
+        if not self.pk:
+            signals.identifier_added.send(self)
+        elif 'value' in self.get_stale_fields():
+            signals.identifier_changed.send(self, old_value=dirty_fields['value'])
+        super(Identifier, self).save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        signals.identifier_removed.send(self)
+        super(Identifier, self).delete(*args, **kwargs)
