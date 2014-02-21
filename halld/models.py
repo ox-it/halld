@@ -121,6 +121,21 @@ class Resource(models.Model, StaleFieldsMixin):
         else:
             self.end_date = None
 
+        point = self.raw_data.get('@point')
+        if isinstance(point, dict):
+            try:
+                self.point = Point(point['lat'], point['lon'], point.get('alt'), srid=4326)
+            except Exception:
+                logger.exception("Couldn't set point from dict: %r", point)
+                self.point = None
+        elif isinstance(point, list):
+            try:
+                self.point = Point(*point[:3], srid=4326)
+            except Exception:
+                logger.exception("Couldn't set point from list: %r", point)
+                self.point = None
+        else:
+            self.point = None
 
     def get_inferences(self):
         return self.get_type().get_inferences()
