@@ -2,7 +2,6 @@ from collections import defaultdict
 import copy
 import datetime
 import itertools
-import uuid
 
 from django.conf import settings
 from django.db.models import Q
