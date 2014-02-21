@@ -2,6 +2,7 @@ from collections import defaultdict
 import copy
 import datetime
 import itertools
+import logging
 
 from django.conf import settings
 from django.db.models import Q
@@ -18,6 +19,8 @@ from .links import get_links
 from .types import get_types
 
 BASE_JSONLD_CONTEXT = getattr(settings, 'BASE_JSONLD_CONTEXT', {}) 
+
+logger = logging.getLogger(__name__)
 
 class Resource(models.Model, StaleFieldsMixin):
     rid = models.CharField(max_length=128, db_index=True, blank=True)
