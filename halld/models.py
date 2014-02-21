@@ -13,13 +13,14 @@ from django.contrib.gis.geos import Point
 from jsonfield import JSONField
 import rdflib
 import ujson as json
+from stalefields.stalefields import StaleFieldsMixin
 
 from .links import get_links
 from .types import get_types
 
 BASE_JSONLD_CONTEXT = getattr(settings, 'BASE_JSONLD_CONTEXT', {}) 
 
-class Resource(models.Model):
+class Resource(models.Model, StaleFieldsMixin):
     rid = models.CharField(max_length=128, db_index=True, blank=True)
     type = models.SlugField()
     identifier = models.SlugField()
@@ -195,7 +196,7 @@ class Resource(models.Model):
 class Source(models.Model):
     slug = models.SlugField(primary_key=True)
 
-class SourceData(models.Model):
+class SourceData(models.Model, StaleFieldsMixin):
     resource = models.ForeignKey(Resource)
     source = models.ForeignKey(Source)
 
@@ -238,7 +239,7 @@ class Link(models.Model):
     link_name = models.SlugField()
     inverted = models.BooleanField()
 
-class Identifier(models.Model):
+class Identifier(models.Model, StaleFieldsMixin):
     resource = models.ForeignKey(Resource, related_name='identifiers')
     scheme = models.SlugField()
     value = models.SlugField()
