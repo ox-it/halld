@@ -1,0 +1,2 @@
+class PubSub(object):
+    pass
