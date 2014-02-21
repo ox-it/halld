@@ -13,6 +13,7 @@ from django.contrib.gis.geos import Point
 from jsonfield import JSONField
 import rdflib
 import ujson as json
+import dateutil.parser
 from stalefields.stalefields import StaleFieldsMixin
 
 from . import signals
@@ -39,6 +40,9 @@ class Resource(models.Model, StaleFieldsMixin):
 
     created = models.DateTimeField(null=True, blank=True)
     modified = models.DateTimeField(null=True, blank=True)
+
+    start_date = models.DateTimeField(null=True, blank=True)
+    end_date = models.DateTimeField(null=True, blank=True)
 
     point = models.PointField(null=True, blank=True)
     geometry = models.GeometryField(null=True, blank=True)
@@ -108,6 +112,14 @@ class Resource(models.Model, StaleFieldsMixin):
     def update_denormalised_fields(self):
         self.uri = self.raw_data['@id']
         self.deleted = bool(self.raw_data.get('@deleted', False))
+        if '@startDate' in self.raw_data:
+            self.start_date = dateutil.parser.parse(self.raw_data['@endDate'])
+        else:
+            self.start_date = None
+        if '@endDate' in self.raw_data:
+            self.end_date = dateutil.parser.parse(self.raw_data['@endDate'])
+        else:
+            self.end_date = None
 
 
     def get_inferences(self):
