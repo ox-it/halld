@@ -1,5 +1,3 @@
-import http.client
-
 from django.test import TestCase, RequestFactory
 
 from halld import exceptions, views
@@ -15,4 +13,3 @@ class IdentifiersTestCase(TestCase):
                                     'value': 'something'})
         with self.assertRaises(exceptions.NoSuchIdentifier):
             self.by_identifier_view(request)
-
