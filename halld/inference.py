@@ -11,11 +11,19 @@ class Inference(metaclass=abc.ABCMeta):
     def __call__(self, resource, hal):
         pass
 
+class Types(Inference):
+    def __call__(self, resource, data):
+        types = resource.get_type().get_contributed_types(resource, data)
+        for source in resource.source_set.all():
+            if not source.deleted:
+                types |= source.get_type().get_contributed_types(source, source.data)
+        data['@types'] = list(types)
+        return data
+
 class Identifiers(Inference):
     def __call__(self, resource, data):
         data['identifier'] = {}
-        for source in data['@source'].values():
-            data['identifier'].update(source.get('identifier', {}))
+        data['identifier'].update(resource.get_type().get_identifiers(resource, data))
         data['identifier'][resource.type_id] = resource.identifier
         # Don't copy type name identifiers
         for resource_type in get_resource_types().values():

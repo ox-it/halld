@@ -7,9 +7,6 @@ import threading
 import uuid
 import importlib
 
-from django.conf import settings
-from django.db.models import Q
-
 from .links import get_link_types
 from ..permissions import VIEW_LINK
 
@@ -22,6 +19,7 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
     
     @property
     def base_url(self):
+        from django.conf import settings
         return '{}{}/'.format(settings.BASE_URL, self.name)
 
     @abc.abstractmethod
@@ -34,7 +32,14 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
     def get_uri_templates(self):
         # None is special; it specifies a reverse on halld:id
         return [None]
-    
+
+    def get_identifiers(self, resource, data):
+        return {}
+
+    contributed_types = frozenset()
+    def get_contributed_types(self, resource, data):
+        return self.contributed_types
+
     def get_hal(self, user, resource, data, with_links=True):
         hal = copy.deepcopy(data)
         links, embedded = defaultdict(list), defaultdict(list)
@@ -58,7 +63,7 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
                     other_data = other.get_hal(other.filter_data(), with_links=False)
                 elif other:
                     other_data = {'href': other.get_absolute_url(),
-                                  '@id': other.uri}
+                                  '@id': other.get_absolute_uri()}
                 else:
                     other_data = {'href': link.target_href}
                 if link_type.functional:
@@ -79,6 +84,7 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
 
     def get_links(self, resource):
         from ..models import Link
+        from django.db.models import Q
         return Link.objects.filter(Q(source=resource) | Q(target=resource))
 
     allow_uri_override = False

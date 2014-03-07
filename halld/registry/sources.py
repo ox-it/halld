@@ -7,11 +7,16 @@ class SourceTypeDefinition(object, metaclass=abc.ABCMeta):
     def name(self):
         pass
 
+    contributed_types = frozenset()
+    def get_contributed_types(self, source, data):
+        return self.contributed_types
+
     @staticmethod
-    def new(name):
+    def new(name, contributed_types=frozenset()):
         source_type = type(name.title() + 'SourceTypeDefinition',
                            (SourceTypeDefinition,),
-                           {'name': name})
+                           {'name': name,
+                            'contributed_types': contributed_types})
         return source_type()
 
 _local = threading.local()

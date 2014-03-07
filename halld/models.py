@@ -19,6 +19,7 @@ from stalefields.stalefields import StaleFieldsMixin
 from . import signals, exceptions
 from halld.registry import get_link_types, get_link_type
 from halld.registry import get_resource_type
+from halld.registry import get_source_type
 
 BASE_JSONLD_CONTEXT = getattr(settings, 'BASE_JSONLD_CONTEXT', {}) 
 
@@ -278,6 +279,9 @@ class Source(models.Model, StaleFieldsMixin):
 
     def get_absolute_url(self):
         return reverse('halld:source-detail', args=[self.resource.type, self.resource.identifier, self.source_id])
+
+    def get_type(self):
+        return get_source_type(self.type_id)
 
     def save(self, *args, **kwargs):
         changed_values = self.get_changed_values()
