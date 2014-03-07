@@ -261,14 +261,15 @@ class SourceDetailView(JSONView, VersioningMixin, JSONRequestMixin):
         return self.do_patch(request, resource, source, patch)
 
     def do_patch(self, request, resource, source, patch):
-        proposed = request.META.get('HTTP_X_PROPOSED') == 'yes'
+        proposed = request.META.get('HTTP_X_PROPOSED') == 'yes' \
+                or request.GET.get('proposed') == 'yes'
         
+        if not patch:
+            return HttpResponse(status=http.client.NO_CONTENT)
+
         if proposed:
             return self.make_patch_proposal(resource, source, patch)
 
-        if not patch:
-            return HttpResponse(status=http.client.NO_CONTENT)
-        
         if not request.user.has_perm('halld_source.change', source):
             raise PermissionDenied
 
