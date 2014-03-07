@@ -284,7 +284,6 @@ class SourceDetailView(JSONView, VersioningMixin, JSONRequestMixin):
         source.author = request.user
         source.committer = request.user
         source.save()
-        resource.regenerate()
         return HttpResponse(status=http.client.NO_CONTENT)
 
     def delete(self, request, resource, source_data):
