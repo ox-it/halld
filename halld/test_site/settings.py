@@ -1,0 +1,36 @@
+SECRET_KEY = 'secret'
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.contrib.gis.db.backends.postgis',
+        'NAME': 'halld-test',
+    },
+}
+
+INSTALLED_APPS = [
+    'django.contrib.auth',
+    'django.contrib.sites',
+    'django.contrib.contenttypes',
+    'halld',
+    'halld.test_site',
+    'django_conneg',
+]
+
+RESOURCE_TYPES = [
+    'halld.test_site.registry.SnakeResourceTypeDefinition',
+    'halld.test_site.registry.PenguinResourceTypeDefinition',
+]
+
+from halld.registry import LinkTypeDefinition, SourceTypeDefinition
+
+LINK_TYPES = [
+    LinkTypeDefinition.new('eats', 'eatenBy'),
+]
+
+SOURCE_TYPES = [
+    SourceTypeDefinition.new('science'),
+]
+
+BASE_URL = 'http://example.com/'
+
+ROOT_URLCONF = 'halld.test_site.urls'

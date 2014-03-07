@@ -26,8 +26,9 @@ import rdflib
 from rdflib_jsonld.parser import to_rdf as parse_jsonld
 
 from . import exceptions
-from .models import Resource, Source, SourceData
-from .types import get_types
+from .models import Resource, Source
+from halld.registry import get_resource_types, get_resource_type
+from halld.registry import get_source_types, get_source_type
 from .util.link_header import parse_link_value
 
 def get_rdf_renderer(format, mimetype, name, rdflib_serializer):
@@ -83,6 +84,8 @@ class JSONRequestMixin(View):
                             "Unsupported request body encoding.")
 
 class HALLDView(ContentNegotiatedView):
+    _default_format = 'hal'
+
     @renderer(format='jsonld', mimetypes=('application/ld+json',), name='JSON-LD')
     def render_jsonld(self, request, context, template_name):
         self.context = as_jsonld(self.context)
@@ -101,22 +104,22 @@ class HALLDView(ContentNegotiatedView):
 class IndexView(HTMLView, HALLDView):
     def get(self, request):
         self.context['_links'] = {
-            'type:{}'.format(type.name): {
-                'href': reverse('halld:resource-type', args=[type.name])}
-            for type in get_types().values()
+            'type:{}'.format(resource_type.name): {
+                'href': reverse('halld:resource-type', args=[resource_type.name])}
+            for resource_type in get_resource_types().values()
         }
         return self.render()
 
 class ResourceTypeView(HALLDView):
-    def dispatch(self, request, type, **kwargs):
+    def dispatch(self, request, resource_type, **kwargs):
         try:
-            type = get_types()[type]
+            resource_type = get_resource_type(resource_type)
         except KeyError:
             raise Http404
-        return super(ResourceTypeView, self).dispatch(request, type, **kwargs)
+        return super(ResourceTypeView, self).dispatch(request, resource_type, **kwargs)
 
-    def get(self, request, type):
-        paginator = Paginator(Resource.objects.filter(type=type.name), 100)
+    def get(self, request, resource_type):
+        paginator = Paginator(Resource.objects.filter(type_id=resource_type.name), 100)
         try:
             page_num = int(request.GET.get('page'))
         except:
@@ -127,9 +130,9 @@ class ResourceTypeView(HALLDView):
             '_links': {
                 'first': {'href': '?page=1'},
                 'last': {'href': '?page={0}'.format(paginator.num_pages)},
-                'find': {'href': reverse('halld:resource-type', args=[type.name]) + '/{identifier}',
+                'find': {'href': reverse('halld:resource-type', args=[resource_type.name]) + '/{identifier}',
                          'templated': True},
-                'findSource': {'href': reverse('halld:resource-type', args=[type.name]) + '/{identifier}/source/{source}',
+                'findSource': {'href': reverse('halld:resource-type', args=[resource_type.name]) + '/{identifier}/source/{source}',
                                'templated': True},
             },
             '_embedded': {'item' :[resource.get_hal(request.user) for resource in page.object_list]},
@@ -141,9 +144,9 @@ class ResourceTypeView(HALLDView):
         
         return self.render()
 
-    def post(self, request, type):
-        identifier = type.generate_identifier()
-        resource = Resource.objects.create(type=type.name,
+    def post(self, request, resource_type):
+        identifier = resource_type.generate_identifier()
+        resource = Resource.objects.create(type_id=resource_type.name,
                                            identifier=identifier)
         return HttpResponseCreated(resource.get_absolute_url())
         
@@ -151,17 +154,18 @@ class ResourceView(HALLDView):
 
     http_method_names = HALLDView.http_method_names + ['patch', 'link', 'unlink']
 
-    def dispatch(self, request, type, identifier, **kwargs):
+    def dispatch(self, request, resource_type, identifier, **kwargs):
         try:
-            type = get_types()[type]
+            resource_type = get_resource_type(resource_type)
         except KeyError:
-            raise Http404
-        if not type.is_valid_identifier(identifier):
-            raise Http404
-        return super(ResourceView, self).dispatch(request, type, identifier, **kwargs)
+            raise exceptions.NoSuchResourceType(resource_type)
+        if not resource_type.is_valid_identifier(identifier):
+            raise exceptions.NotValidIdentifier(identifier)
+        href = resource_type.base_url + identifier
+        return super(ResourceView, self).dispatch(request, resource_type, identifier, href, **kwargs)
 
-    def get(self, request, type, identifier):
-        resource = get_object_or_404(Resource, type=type.name, identifier=identifier)
+    def get(self, request, resource_type, identifier, href):
+        resource = get_object_or_404(Resource, href=href)
         self.context['resource'] = resource
         if resource.deleted:
             raise Http404
@@ -172,15 +176,15 @@ class ResourceView(HALLDView):
         #    return HttpResponsePermanentRedirect(resource.moved_to.get_absolute_url())
         return self.render()
 
-    def post(self, request, type, identifier):
+    def post(self, request, resource_type, identifier, href):
         try:
-            resource = Resource.objects.get(type=type.name, identifier=identifier)
+            resource = Resource.objects.get(href=href)
         except Resource.DoesNotExist:
-            if type.user_can_assign_identifier(request.user, identifier):
-                resource = Resource.objects.create(type=type.name, identifier=identifier)
+            if resource_type.user_can_assign_identifier(request.user, identifier):
+                resource = Resource.objects.create(type_id=resource_type.name, identifier=identifier)
                 return HttpResponseCreated(resource.get_absolute_url())
             else:
-                raise PermissionDenied
+                raise exceptions.CannotAssignIdentifier
         else:
             raise exceptions.ResourceAlreadyExists(resource)
 
@@ -189,11 +193,11 @@ class ResourceView(HALLDView):
         resource = context['resource']
         data = resource.filter_data(request.user, resource.data)
         hal = resource.get_hal(request.user, data)
-        for source_data in resource.sourcedata_set.all():
-            if not request.user.has_perm('halld.view_source_data', source_data):
+        for source in resource.source_set.all():
+            if not request.user.has_perm('halld.view_source', source):
                 continue
-            hal['_links']['source:{}'.format(source_data.source_id)] = {
-                'href': source_data.get_absolute_url(),
+            hal['_links']['source:{}'.format(source.type_id)] = {
+                'href': source.get_absolute_url(),
             }
         return HttpResponse(json.dumps(hal, indent=2, sort_keys=True),
                             mimetype='application/hal+json')
@@ -204,76 +208,81 @@ class SourceListView(JSONView):
 
 class SourceDetailView(JSONView, VersioningMixin, JSONRequestMixin):
     @method_decorator(login_required)
-    def dispatch(self, request, type, identifier, source):
+    def dispatch(self, request, resource_type, identifier, source_type):
         try:
-            resource = Resource.objects.get(type=type, identifier=identifier)
+            resource_type = get_resource_type(resource_type)
+        except KeyError:
+            raise Http404
+        href = resource_type.base_url + identifier
+        try:
+            resource = Resource.objects.get(href=href)
         except Resource.DoesNotExist:
-            raise exceptions.SourceDataWithoutResource(type, identifier)
-        resource = get_object_or_404(Resource, type=type, identifier=identifier)
+            raise exceptions.SourceDataWithoutResource(resource_type, identifier)
         try:
-            source_data = SourceData.objects.get(resource=resource, source=source)
-        except SourceData.DoesNotExist:
-            source = get_object_or_404(Source, pk=source)
+            source_type = get_source_type(source_type)
+        except KeyError:
+            raise exceptions.NoSuchSourceType(source_type)
+        try:
+            source = Source.objects.get(resource=resource, type_id=source_type.name)
+        except Source.DoesNotExist:
             if request.method.lower() in ('put', 'delete', 'patch', 'move'):
-                source_data = SourceData(resource=resource, source=source)
+                source = Source(resource=resource, type_id=source_type.name)
             else:
                 raise Http404
-        
-        return super(SourceDetailView, self).dispatch(request, resource, source_data)
 
-    def get(self, request, resource, source_data):
-        if not request.user.has_perm('halld.view_sourcedata', source_data):
+        return super(SourceDetailView, self).dispatch(request, resource, source)
+
+    def get(self, request, resource, source):
+        if not request.user.has_perm('halld.view_source', source):
             raise PermissionDenied
-        if self.check_version(source_data) is True:
+        if self.check_version(source) is True:
             return HttpResponseNotModified()
-        if source_data.deleted:
+        if source.deleted:
             raise HttpGone
-        data = source_data.filter_data(request.user)
+        data = source.filter_data(request.user)
         response = HttpResponse(json.dumps(data, indent=2, sort_keys=True),
                                 content_type='application/json')
-        response['Last-Modified'] = wsgiref.handlers.format_date_time(mktime(source_data.modified.timetuple()))
-        response['ETag'] = source_data.get_etag()
+        response['Last-Modified'] = wsgiref.handlers.format_date_time(mktime(source.modified.timetuple()))
+        response['ETag'] = source.get_etag()
         return response
 
-    def put(self, request, resource, source_data):
-        if self.check_version(source_data) is False:
+    def put(self, request, resource, source):
+        if self.check_version(source) is False:
             raise HttpConflict
         data = self.get_request_json('application/json')
-        old_data = source_data.filter_data(request.user)
+        old_data = source.filter_data(request.user)
         patch = jsonpatch.make_patch(old_data, data)
-        return self.do_patch(request, resource, source_data, patch)
+        return self.do_patch(request, resource, source, patch)
 
-    def patch(self, request, resource, source_data):
-        if self.check_version(source_data) is False:
+    def patch(self, request, resource, source):
+        if self.check_version(source) is False:
             raise HttpConflict
         patch = self.get_request_json('application/patch+json')
-        return self.do_patch(request, resource, source_data, patch)
+        return self.do_patch(request, resource, source, patch)
 
-    def do_patch(self, request, resource, source_data, patch):
+    def do_patch(self, request, resource, source, patch):
         proposed = request.META.get('HTTP_X_PROPOSED') == 'yes'
         
         if proposed:
-            return self.make_patch_proposal(resource, source_data, patch)
+            return self.make_patch_proposal(resource, source, patch)
 
         if not patch:
-            pass#return HttpResponse(status=http.client.NO_CONTENT)
+            return HttpResponse(status=http.client.NO_CONTENT)
         
-        if not request.user.has_perm('halld_sourcedata.change', source_data):
+        if not request.user.has_perm('halld_source.change', source):
             raise PermissionDenied
 
-        patched = jsonpatch.apply_patch(source_data.data, patch)
-        if not source_data.patch_acceptable(request.user, patch):
+        patched = jsonpatch.apply_patch(source.data, patch)
+        if not source.patch_acceptable(request.user, patch):
             raise PermissionDenied
-        filtered_patched = source_data.filter_data(request.user, patched)
+        filtered_patched = source.filter_data(request.user, patched)
         if patched != filtered_patched:
             raise PermissionDenied
-        
-        print("Applying")
-        source_data.data = filtered_patched
-        source_data.author = request.user
-        source_data.committer = request.user
-        source_data.version += 1
-        source_data.save()
+
+        source.data = filtered_patched
+        source.author = request.user
+        source.committer = request.user
+        source.save()
         resource.regenerate()
         return HttpResponse(status=http.client.NO_CONTENT)
 
@@ -291,6 +300,7 @@ class SourceDetailView(JSONView, VersioningMixin, JSONRequestMixin):
         return HttpResponse(status_code=http.client.NO_CONTENT)
 
     def move(self, request, resource, source_data):
+        raise NotImplementedError
         if not request.user.has_perm('halld.move_sourcedata', source_data):
             raise PermissionDenied
 
@@ -302,5 +312,5 @@ class SourceDetailView(JSONView, VersioningMixin, JSONRequestMixin):
             raise HttpBadRequest
 
 class IdView(View):
-    def dispatch(self, request, type, identifier):
-        return HttpResponseSeeOther(reverse('resource', args=[type, identifier]))
+    def dispatch(self, request, resource_type, identifier):
+        return HttpResponseSeeOther(reverse('resource', args=[resource_type, identifier]))

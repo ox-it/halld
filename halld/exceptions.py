@@ -22,21 +22,45 @@ class HALLDException(Exception, metaclass=abc.ABCMeta):
             'description': self.description,
         }
 
+class CannotAssignIdentifier(HALLDException):
+    name = 'cannot-assign-identifier'
+    description = 'You are not permitted to assign identifiers for this type of resource. POST against the resource collection to have one assigned.'
+    status_code = http.client.FORBIDDEN
+
+class NoSuchResourceType(HALLDException):
+    name = 'no-such-resource-type'
+    description = 'There is no such resource type'
+    status_code = http.client.NOT_FOUND
+
+    def __init__(self, resource_type):
+        self.resource_type = resource_type
+
+    def as_hal(self):
+        hal = super(NoSuchResourceType, self).as_hal()
+        hal['resourceType'] = self.resource_type
+        return hal
+
+class NotValidIdentifier(HALLDException):
+    name = 'not-a-valid-identifier'
+    description = 'The resource identifier is not valid'
+    status_code = http.client.NOT_FOUND
+
 class LinkTargetDoesNotExist(HALLDException):
     name = 'link-target-does-not-exist'
     description = 'The source data contains a link to a resource that does not exist.'
+    status_code = http.client.CONFLICT
 
-    def __init__(self, link, rid):
-        self.link, self.rid = link, rid
+    def __init__(self, link_type, href):
+        self.link_type, self.href = link_type, href
 
     def as_hal(self):
         hal = super(LinkTargetDoesNotExist, self).as_hal()
         hal['_links'] = {
             'missingResource': {
-                'href': reverse('halld:index') + self.rid,
+                'href': self.href,
             },
         }
-        hal['link_name'] = self.link.name
+        hal['link_name'] = self.link_type.name
         return hal
 
 class SourceDataWithoutResource(HALLDException):
@@ -44,16 +68,29 @@ class SourceDataWithoutResource(HALLDException):
     description = 'You are attempting to view or update source data for a resource that does not exist. You should make sure the resource exists before trying again.'
     status_code = http.client.NOT_FOUND
 
-    def __init__(self, type, identifier):
-        self.type, self.identifier = type, identifier
+    def __init__(self, resource_type, identifier):
+        self.resource_type, self.identifier = resource_type, identifier
 
     def as_hal(self):
         hal = super(SourceDataWithoutResource, self).as_hal()
         hal['_links'] = {
             'missingResource': {
-                'href': reverse('halld:resource', args=[self.type, self.identifier]),
+                'href': reverse('halld:resource', args=[self.resource_type.name, self.identifier]),
             },
         }
+        return hal
+
+class NoSuchSourceType(HALLDException):
+    name = 'no-such-source-type'
+    description = 'There is no such source type'
+    status_code = http.client.NOT_FOUND
+
+    def __init__(self, source_type):
+        self.source_type = source_type
+
+    def as_hal(self):
+        hal = super(NoSuchSourceType, self).as_hal()
+        hal['sourceType'] = self.source_type
         return hal
 
 class ResourceAlreadyExists(HALLDException):

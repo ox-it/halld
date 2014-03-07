@@ -3,9 +3,9 @@ import copy
 import datetime
 import itertools
 import logging
+from urllib.parse import urljoin
 
 from django.conf import settings
-from django.db.models import Q
 from django.core.urlresolvers import reverse
 from django.contrib.auth.models import User
 from django.contrib.gis.db import models
@@ -16,17 +16,23 @@ import ujson as json
 import dateutil.parser
 from stalefields.stalefields import StaleFieldsMixin
 
-from . import signals
-from .links import get_links
-from .types import get_types
+from . import signals, exceptions
+from halld.registry import get_link_types, get_link_type
+from halld.registry import get_resource_type
 
 BASE_JSONLD_CONTEXT = getattr(settings, 'BASE_JSONLD_CONTEXT', {}) 
 
 logger = logging.getLogger(__name__)
 
+class ResourceType(models.Model):
+    name = models.SlugField(primary_key=True)
+
+    def __str__(self):
+        return self.name
+
 class Resource(models.Model, StaleFieldsMixin):
-    rid = models.CharField(max_length=128, db_index=True, blank=True)
-    type = models.SlugField()
+    href = models.CharField(max_length=2048, db_index=True, blank=True)
+    type = models.ForeignKey(ResourceType)
     identifier = models.SlugField()
     uri = models.CharField(max_length=1024, db_index=True, blank=True)
 
@@ -46,12 +52,12 @@ class Resource(models.Model, StaleFieldsMixin):
 
     point = models.PointField(null=True, blank=True)
     geometry = models.GeometryField(null=True, blank=True)
-    
+
     def regenerate(self):
         raw_data = {'@source': {},
                     'href': self.get_absolute_url()}
-        for source_data in self.sourcedata_set.all():
-            raw_data['@source'][source_data.source_id] = copy.deepcopy(source_data.data)
+        for source in self.source_set.all():
+            raw_data['@source'][source.type_id] = copy.deepcopy(source.data)
         inferences = self.get_inferences()
         for inference in inferences:
             inference(self, raw_data)
@@ -66,45 +72,44 @@ class Resource(models.Model, StaleFieldsMixin):
 
     def save(self, *args, **kwargs):
         has_pk = self.pk is not None
-        self.rid = '{}/{}'.format(self.type, self.identifier)
-        if kwargs.pop('regenerate') is not False:
+        self.href = self.get_type().base_url + self.identifier
+        if kwargs.pop('regenerate', True) is not False:
             self.regenerate()
-        dirty_fields = self.get_stale_fields()
-        if 'raw_data' in dirty_fields:
+        regenerated = {self} | kwargs.pop('regenerated', set())
+        if 'raw_data' in self.stale_fields:
             cascade_to = self.update_data()
-            regenerated = kwargs.pop('regenerated', set())
             cascade_to -= regenerated
 
-        dirty_fields = self.get_stale_fields()
-        if 'data' in dirty_fields:
+        if 'data' in self.stale_fields:
+            changed_values = self.get_changed_values()
             self.created = self.created or datetime.datetime.utcnow()
             self.modified = datetime.datetime.utcnow()
             self.version += 1
-            super(Resource, self).save(*args, **kwargs)
+            self.data['meta'] = {'created': self.created,
+                                 'modified': self.modified,
+                                 'version': self.version}
+
+            super(Resource, self).save()
             if has_pk:
-                signals.resource_updated(self, dirty_fields['data'])
+                signals.resource_changed.send(self, old_data=changed_values['data'])
             else:
-                signals.resource_created(self)
+                signals.resource_created.send(self)
 
             for resource in cascade_to:
                 resource.save(regenerated=regenerated)
-        elif self.is_stale():
-            super(Resource, self).save(*args, **kwargs)
+        elif self.is_stale:
+            super(Resource, self).save()
 
-    def update_data(self, regenerated):
+    def update_data(self):
         cascade_to = set()
-        cascade_to.update(l.target for l in Link.objects.filter(source=self).select_related('target'))
+        cascade_to.update(l.target for l in Link.objects.filter(source=self).select_related('target') if l.target)
         cascade_to.update(self.update_links(self.raw_data))
-        cascade_to -= regenerated
         
         self.update_identifiers(self.raw_data)
 
         data = copy.deepcopy(self.raw_data)
-        for link in get_links().values():
-            data.pop(link.name, None)
-        data['meta'] = {'created': self.created,
-                        'modified': self.modified,
-                        'version': self.version}
+        for link_type in get_link_types().values():
+            data.pop(link_type.name, None)
         self.data = data
 
         return cascade_to
@@ -141,7 +146,7 @@ class Resource(models.Model, StaleFieldsMixin):
         return self.get_type().get_inferences()
 
     def get_type(self):
-        return get_types()[self.type]
+        return get_resource_type(self.type_id)
 
     def get_hal(self, user, data=None):
         return self.get_type().get_hal(user, self, data or self.data)
@@ -154,39 +159,42 @@ class Resource(models.Model, StaleFieldsMixin):
 
     def update_links(self, data):
         if not self.pk:
-            self.save()
+            super(Resource, self).save()
 
-        targets = set()
         link_data = set()
-        for link in get_links().values():
-            rids = data.get(link.name, [])
-            if not isinstance(rids, list):
-                rids = [rids]
-            targets.update(rids)
-            for rid in rids:
-                if link.inverted:
-                    link_data.add((rid, link.inverse_name, True))
-                else:
-                    link_data.add((rid, link.name, False))
+        hrefs = set()
+        for name, links in self.get_type().get_link_data(data).items():
+            link_type = get_link_type(name)
+            for link in links:
+                if isinstance(link, str):
+                    link = {'href': link}
+                link['href'] = urljoin(self.href, link['href'])
+                link_data.add((link['href'],
+                               link_type.inverse_name if link_type.inverted else link_type.name,
+                               link_type.inverted))
+                hrefs.add(link['href'])
 
-        targets = {r.rid: r for r in Resource.objects.filter(rid__in=targets)}
+        targets = {r.href: r for r in Resource.objects.filter(href__in=hrefs)}
 
         links = list(Link.objects.filter(source=self).select_related('target'))
         for link in links:
-            lid = link.target.rid, link.link_name, link.inverted
+            lid = link.target_href, link.type_id, link.inverted
             if lid in link_data:
                 link_data.remove(lid)
             else:
                 link.delete()
-        for rid, link_name, inverted in link_data:
-            target = targets[rid]
+        for href, link_name, inverted in link_data:
+            target = targets.get(href)
+            if get_link_type(link_name).strict and not target:
+                raise exceptions.LinkTargetDoesNotExist(get_link_type(link_name), href)
             links.append(Link.objects.create(source=self,
                                              target=target,
-                                             link_name=link_name,
+                                             target_href=href,
+                                             type_id=link_name,
                                              active=target if inverted else self,
                                              passive=self if inverted else target,
                                              inverted=inverted))
-        return [l.target for l in links]
+        return [l.target for l in links if l.target]
 
     def update_identifiers(self, data):
         identifiers = dict(data.get('identifier', {}))
@@ -218,7 +226,7 @@ class Resource(models.Model, StaleFieldsMixin):
         raise AssertionError
 
     def get_absolute_url(self):
-        return reverse('halld:resource', args=[self.type, self.identifier])
+        return self.get_type().base_url + self.identifier
 
     def filter_data(self, user, data=None):
         data = data if data is not None else self.data
@@ -226,21 +234,24 @@ class Resource(models.Model, StaleFieldsMixin):
     
     def __str__(self):
         if 'label' in self.data:
-            return '{} ("{}")'.format(self.rid, self.data['label'])
+            return '{} ("{}")'.format(self.href, self.data['label'])
         else:
-            return self.rid
+            return self.href
 
     class Meta:
         index_together = [
             ['type', 'identifier'],
         ]
 
-class Source(models.Model):
-    slug = models.SlugField(primary_key=True)
+class SourceType(models.Model):
+    name = models.SlugField(primary_key=True)
 
-class SourceData(models.Model, StaleFieldsMixin):
+    def __str__(self):
+        return self.name
+
+class Source(models.Model, StaleFieldsMixin):
     resource = models.ForeignKey(Resource)
-    source = models.ForeignKey(Source)
+    type = models.ForeignKey(SourceType)
 
     author = models.ForeignKey(User, related_name='author_of')
     committer = models.ForeignKey(User, related_name='committer_of')
@@ -269,24 +280,31 @@ class SourceData(models.Model, StaleFieldsMixin):
         return reverse('halld:source-detail', args=[self.resource.type, self.resource.identifier, self.source_id])
 
     def save(self, *args, **kwargs):
-        stale_fields = self.get_stale_fields()
-        if 'data' in stale_fields:
+        changed_values = self.get_changed_values()
+        if 'data' in changed_values:
             self.version += 1
-            super(SourceData, self).save()
+            super(Source, self).save()
             if not self.pk:
                 signals.sourcedata_created.send(self)
             else:
-                signals.sourcedata_updated.send(self, old_data=stale_fields['data'])
-            self.resource.refresh()
-        elif self.is_stale():
-            super(SourceData, self).save()
+                signals.sourcedata_changed.send(self, old_data=changed_values['data'])
+            self.resource.save()
+        elif self.is_stale:
+            super(Source, self).save()
+
+class LinkType(models.Model):
+    name = models.SlugField(primary_key=True)
+
+    def __str__(self):
+        return self.name
 
 class Link(models.Model):
     source = models.ForeignKey(Resource, related_name='link_source')
-    target = models.ForeignKey(Resource, related_name='link_target')
-    active = models.ForeignKey(Resource, related_name='link_active')
-    passive = models.ForeignKey(Resource, related_name='link_passive')
-    link_name = models.SlugField()
+    target_href = models.CharField(max_length=2048)
+    target = models.ForeignKey(Resource, related_name='link_target', null=True, blank=True)
+    active = models.ForeignKey(Resource, related_name='link_active', null=True, blank=True)
+    passive = models.ForeignKey(Resource, related_name='link_passive', null=True, blank=True)
+    type = models.ForeignKey(LinkType)
     inverted = models.BooleanField()
 
 class Identifier(models.Model, StaleFieldsMixin):
@@ -295,13 +313,12 @@ class Identifier(models.Model, StaleFieldsMixin):
     value = models.SlugField()
 
     def save(self, *args, **kwargs):
-        dirty_fields = self.get_stale_fields()
+        changed_values = self.get_changed_values()
         super(Identifier, self).save(*args, **kwargs)
         if not self.pk:
             signals.identifier_added.send(self)
-        elif 'value' in self.get_stale_fields():
-            signals.identifier_changed.send(self, old_value=dirty_fields['value'])
-        super(Identifier, self).save(*args, **kwargs)
+        elif 'value' in changed_values:
+            signals.identifier_changed.send(self, old_value=changed_values['value'])
 
     def delete(self, *args, **kwargs):
         signals.identifier_removed.send(self)
