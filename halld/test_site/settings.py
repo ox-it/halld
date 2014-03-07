@@ -1,12 +1,5 @@
 SECRET_KEY = 'secret'
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.contrib.gis.db.backends.postgis',
-        'NAME': 'halld-test',
-    },
-}
-
 INSTALLED_APPS = [
     'django.contrib.auth',
     'django.contrib.sites',
