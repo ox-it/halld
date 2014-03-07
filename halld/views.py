@@ -26,7 +26,7 @@ import rdflib
 from rdflib_jsonld.parser import to_rdf as parse_jsonld
 
 from . import exceptions
-from .models import Resource, Source
+from .models import Resource, Source, Identifier
 from halld.registry import get_resource_types, get_resource_type
 from halld.registry import get_source_types, get_source_type
 from .util.link_header import parse_link_value
@@ -314,3 +314,14 @@ class SourceDetailView(JSONView, VersioningMixin, JSONRequestMixin):
 class IdView(View):
     def dispatch(self, request, resource_type, identifier):
         return HttpResponseSeeOther(reverse('resource', args=[resource_type, identifier]))
+
+class ByIdentifierView(View):
+    def get(self, request):
+        try:
+            scheme, value = request.GET['scheme'], request.GET['value']
+        except KeyError:
+            raise exceptions.MissingRequiredQueryParameters()
+        try:
+            identifier = Identifier.objects.get(scheme=scheme, value=value)
+        except Identifier.DoesNotExist:
+            raise exceptions.NoSuchIdentifier(scheme=scheme, value=value)

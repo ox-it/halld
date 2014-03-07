@@ -93,6 +93,20 @@ class NoSuchSourceType(HALLDException):
         hal['sourceType'] = self.source_type
         return hal
 
+class NoSuchIdentifier(HALLDException):
+    name = 'no-such-identifier'
+    description = 'There is no such identifier'
+    status_code = http.client.NOT_FOUND
+
+    def __init__(self, scheme, value):
+        self.scheme, self.value = scheme, value
+
+    def as_hal(self):
+        hal = super(NoSuchIdentifier, self).as_hal()
+        hal['scheme'] = self.scheme
+        hal['value'] = self.value
+        return hal
+
 class ResourceAlreadyExists(HALLDException):
     name = 'resource-already-exists'
     description = "You're trying to create a resource that already exists."
