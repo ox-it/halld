@@ -15,9 +15,9 @@ import dateutil.parser
 from stalefields.stalefields import StaleFieldsMixin
 
 from . import signals, exceptions
-from halld.registry import get_link_types, get_link_type
-from halld.registry import get_resource_type
-from halld.registry import get_source_type
+from .registry import get_link_types, get_link_type
+from .registry import get_resource_type
+from .registry import get_source_type
 from .conf import is_spatial_backend
 
 if is_spatial_backend:
