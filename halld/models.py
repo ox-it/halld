@@ -8,8 +8,6 @@ from urllib.parse import urljoin
 from django.conf import settings
 from django.core.urlresolvers import reverse
 from django.contrib.auth.models import User
-from django.contrib.gis.db import models
-from django.contrib.gis.geos import Point
 from jsonfield import JSONField
 import rdflib
 import ujson as json
@@ -20,8 +18,13 @@ from . import signals, exceptions
 from halld.registry import get_link_types, get_link_type
 from halld.registry import get_resource_type
 from halld.registry import get_source_type
+from .conf import is_spatial_backend
 
-BASE_JSONLD_CONTEXT = getattr(settings, 'BASE_JSONLD_CONTEXT', {}) 
+if is_spatial_backend:
+    from django.contrib.gis.db import models
+    from django.contrib.gis.geos import Point
+else:
+    from django.db import models
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +54,9 @@ class Resource(models.Model, StaleFieldsMixin):
     start_date = models.DateTimeField(null=True, blank=True)
     end_date = models.DateTimeField(null=True, blank=True)
 
-    point = models.PointField(null=True, blank=True)
-    geometry = models.GeometryField(null=True, blank=True)
+    if is_spatial_backend:
+        point = models.PointField(null=True, blank=True)
+        geometry = models.GeometryField(null=True, blank=True)
 
     def regenerate(self):
         raw_data = {'@source': {},
@@ -127,21 +131,22 @@ class Resource(models.Model, StaleFieldsMixin):
         else:
             self.end_date = None
 
-        point = self.raw_data.get('@point')
-        if isinstance(point, dict):
-            try:
-                self.point = Point(point['lat'], point['lon'], point.get('alt'), srid=4326)
-            except Exception:
-                logger.exception("Couldn't set point from dict: %r", point)
+        if is_spatial_backend:
+            point = self.raw_data.get('@point')
+            if isinstance(point, dict):
+                try:
+                    self.point = Point(point['lat'], point['lon'], point.get('alt'), srid=4326)
+                except Exception:
+                    logger.exception("Couldn't set point from dict: %r", point)
+                    self.point = None
+            elif isinstance(point, list):
+                try:
+                    self.point = Point(*point[:3], srid=4326)
+                except Exception:
+                    logger.exception("Couldn't set point from list: %r", point)
+                    self.point = None
+            else:
                 self.point = None
-        elif isinstance(point, list):
-            try:
-                self.point = Point(*point[:3], srid=4326)
-            except Exception:
-                logger.exception("Couldn't set point from list: %r", point)
-                self.point = None
-        else:
-            self.point = None
 
     def get_inferences(self):
         return self.get_type().get_inferences()
