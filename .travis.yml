@@ -4,4 +4,4 @@ python:
 install:
   - pip install -r requirements-travis.txt
   - pip install .
-script: django-admin.py test halld.test --settings=halld.test_site.settings_spatialite
+script: django-admin.py test halld.test --settings=halld.test_site.settings_sqlite3
