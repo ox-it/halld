@@ -1,5 +1,7 @@
 # halld
 
+[![Build Status](https://travis-ci.org/ox-it/halld.png?branch=master)](https://travis-ci.org/ox-it/halld)
+
 A HAL-based RESTful wotsit for storing structured information about things from multiple sources.
 
 Still a work in progress.
