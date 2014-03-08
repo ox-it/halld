@@ -1,0 +1,14 @@
+django
+django-conneg
+#django-stalefields
+-e git+git://github.com/alexsdutton/django-stalefields.git#egg=django_stalefields
+-e git+git://github.com/RDFLib/rdflib-jsonld.git#egg=rdflib_jsonld
+jsonfield
+jsonpatch
+jsonpointer
+python-dateutil
+rdflib
+redis
+ujson
+
+
