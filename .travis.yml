@@ -4,7 +4,6 @@ python:
 install:
   - pip install -r requirements-travis.txt
   - pip install coveralls
-  - pip install .
-script: coverage run `which django-admin.py` test halld.test --settings=halld.test_site.settings_sqlite3
+script: PYTHONPATH=. coverage run --source=. `which django-admin.py` test halld.test --settings=halld.test_site.settings_sqlite3
 after_script:
   - coveralls
