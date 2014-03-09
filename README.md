@@ -1,6 +1,6 @@
 # halld
 
-[![Build Status](https://travis-ci.org/ox-it/halld.png?branch=master)](https://travis-ci.org/ox-it/halld)
+[![Build Status](https://travis-ci.org/ox-it/halld.png?branch=master)](https://travis-ci.org/ox-it/halld) [![Coverage Status](https://coveralls.io/repos/ox-it/halld/badge.png?branch=master)](https://coveralls.io/r/ox-it/halld?branch=master)
 
 A HAL-based RESTful wotsit for storing structured information about things from multiple sources.
 
