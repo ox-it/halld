@@ -134,6 +134,8 @@ class ResourceTypeView(HALLDView):
                          'templated': True},
                 'findSource': {'href': reverse('halld:resource-type', args=[resource_type.name]) + '/{identifier}/source/{source}',
                                'templated': True},
+                'findSourceList': {'href': reverse('halld:resource-type', args=[resource_type.name]) + '/{identifier}/source',
+                                   'templated': True},
             },
             '_embedded': {'item' :[resource.get_hal(request.user) for resource in page.object_list]},
         })
@@ -199,68 +201,15 @@ class ResourceView(HALLDView):
             hal['_links']['source:{}'.format(source.type_id)] = {
                 'href': source.get_absolute_url(),
             }
+        hal['_links']['source'] = {
+            'href': reverse('halld:source-list', args=[resource.type_id, resource.identifier]),
+        }
         return HttpResponse(json.dumps(hal, indent=2, sort_keys=True),
                             mimetype='application/hal+json')
 
+class SourceView(JSONView, JSONRequestMixin):
 
-class SourceListView(JSONView):
-    pass
-
-class SourceDetailView(JSONView, VersioningMixin, JSONRequestMixin):
-    @method_decorator(login_required)
-    def dispatch(self, request, resource_type, identifier, source_type):
-        try:
-            resource_type = get_resource_type(resource_type)
-        except KeyError:
-            raise Http404
-        href = resource_type.base_url + identifier
-        try:
-            resource = Resource.objects.get(href=href)
-        except Resource.DoesNotExist:
-            raise exceptions.SourceDataWithoutResource(resource_type, identifier)
-        try:
-            source_type = get_source_type(source_type)
-        except KeyError:
-            raise exceptions.NoSuchSourceType(source_type)
-        try:
-            source = Source.objects.get(resource=resource, type_id=source_type.name)
-        except Source.DoesNotExist:
-            if request.method.lower() in ('put', 'delete', 'patch', 'move'):
-                source = Source(resource=resource, type_id=source_type.name)
-            else:
-                raise Http404
-
-        return super(SourceDetailView, self).dispatch(request, resource, source)
-
-    def get(self, request, resource, source):
-        if not request.user.has_perm('halld.view_source', source):
-            raise PermissionDenied
-        if self.check_version(source) is True:
-            return HttpResponseNotModified()
-        if source.deleted:
-            raise HttpGone
-        data = source.filter_data(request.user)
-        response = HttpResponse(json.dumps(data, indent=2, sort_keys=True),
-                                content_type='application/json')
-        response['Last-Modified'] = wsgiref.handlers.format_date_time(mktime(source.modified.timetuple()))
-        response['ETag'] = source.get_etag()
-        return response
-
-    def put(self, request, resource, source):
-        if self.check_version(source) is False:
-            raise HttpConflict
-        data = self.get_request_json('application/json')
-        old_data = source.filter_data(request.user)
-        patch = jsonpatch.make_patch(old_data, data)
-        return self.do_patch(request, resource, source, patch)
-
-    def patch(self, request, resource, source):
-        if self.check_version(source) is False:
-            raise HttpConflict
-        patch = self.get_request_json('application/patch+json')
-        return self.do_patch(request, resource, source, patch)
-
-    def do_patch(self, request, resource, source, patch):
+    def do_patch(self, request, source, patch):
         proposed = request.META.get('HTTP_X_PROPOSED') == 'yes' \
                 or request.GET.get('proposed') == 'yes'
         
@@ -268,7 +217,7 @@ class SourceDetailView(JSONView, VersioningMixin, JSONRequestMixin):
             return HttpResponse(status=http.client.NO_CONTENT)
 
         if proposed:
-            return self.make_patch_proposal(resource, source, patch)
+            return self.make_patch_proposal(source, patch)
 
         if not request.user.has_perm('halld_source.change', source):
             raise PermissionDenied
@@ -286,6 +235,112 @@ class SourceDetailView(JSONView, VersioningMixin, JSONRequestMixin):
         source.save()
         return HttpResponse(status=http.client.NO_CONTENT)
 
+class SourceListView(SourceView):
+    @method_decorator(login_required)
+    def dispatch(self, request, resource_type, identifier, **kwargs):
+        print (resource_type)
+        try:
+            resource_type = get_resource_type(resource_type)
+        except KeyError:
+            raise exceptions.NoSuchResourceType(resource_type)
+        resource_href = resource_type.base_url + identifier
+        sources = Source.objects.filter(resource__href=resource_href)
+        if not sources.count():
+            try:
+                Resource.objects.filter(href=resource_href).exists()
+            except Resource.DoesNotExist:
+                raise exceptions.SourceDataWithoutResource(resource_type, identifier)
+        return super(SourceListView, self).dispatch(request, resource_href, sources)
+
+    def get(self, request, resource_href, sources):
+        visible_sources = [source for source in sources
+                                  if not source.deleted and
+                                     request.user.has_perm('halld.view_source', source)]
+        data = {source.type_id: source.filter_data(request.user) for source in visible_sources}
+        response = HttpResponse(json.dumps(data, indent=2, sort_keys=True),
+                                content_type='application/json')
+        return response
+    
+    def put(self, request, resource_href, sources):
+        sources = {source.type_id: source for source in sources}
+        data = self.get_request_json('application/json')
+        print(("DATA", data))
+        if not isinstance(data, dict):
+            raise HttpBadRequest
+        for key in data:
+            try:
+                get_source_type(key)
+            except KeyError:
+                raise exceptions.NoSuchSourceType(key)
+
+        for key in data:
+            if key in sources:
+                source = sources[key]
+            else:
+                resource = Resource.objects.get(href=resource_href)
+                sources[key] = source = Source(resource=resource, type_id=key)
+
+            old_data = source.filter_data(request.user)
+            new_data = data[key]
+            patch = jsonpatch.make_patch(old_data, new_data)
+            self.do_patch(request, source, patch)
+        return HttpResponse(status=http.client.NO_CONTENT)
+
+class SourceDetailView(VersioningMixin, SourceView):
+    @method_decorator(login_required)
+    def dispatch(self, request, resource_type, identifier, source_type, **kwargs):
+        try:
+            resource_type = get_resource_type(resource_type)
+        except KeyError:
+            raise Http404
+        try:
+            source_type = get_source_type(source_type)
+        except KeyError:
+            raise exceptions.NoSuchSourceType(source_type)
+        resource_href = resource_type.base_url + identifier
+        source_href = resource_href + '/source/' + source_type.name
+        try:
+            source = Source.objects.get(href=source_href)
+        except Source.DoesNotExist:
+            try:
+                resource = Resource.objects.get(href=resource_href)
+            except Resource.DoesNotExist:
+                raise exceptions.SourceDataWithoutResource(resource_type, identifier)
+            if request.method.lower() in ('put', 'delete', 'patch', 'move'):
+                source = Source(resource=resource, type_id=source_type.name)
+            else:
+                raise Http404
+
+        return super(SourceDetailView, self).dispatch(request, source)
+
+    def get(self, request, source):
+        if not request.user.has_perm('halld.view_source', source):
+            raise PermissionDenied
+        if self.check_version(source) is True:
+            return HttpResponseNotModified()
+        if source.deleted:
+            raise HttpGone
+        data = source.filter_data(request.user)
+        response = HttpResponse(json.dumps(data, indent=2, sort_keys=True),
+                                content_type='application/json')
+        response['Last-Modified'] = wsgiref.handlers.format_date_time(mktime(source.modified.timetuple()))
+        response['ETag'] = source.get_etag()
+        return response
+
+    def put(self, request, source):
+        if self.check_version(source) is False:
+            raise HttpConflict
+        data = self.get_request_json('application/json')
+        old_data = source.filter_data(request.user)
+        patch = jsonpatch.make_patch(old_data, data)
+        return self.do_patch(request, source, patch)
+
+    def patch(self, request, source):
+        if self.check_version(source) is False:
+            raise HttpConflict
+        patch = self.get_request_json('application/patch+json')
+        return self.do_patch(request, source, patch)
+
     def delete(self, request, resource, source_data):
         if not request.user.has_perm('halld.delete_sourcedata', source_data):
             raise PermissionDenied
@@ -299,7 +354,7 @@ class SourceDetailView(JSONView, VersioningMixin, JSONRequestMixin):
         resource.regenerate()
         return HttpResponse(status_code=http.client.NO_CONTENT)
 
-    def move(self, request, resource, source_data):
+    def move(self, request, source_data):
         raise NotImplementedError
         if not request.user.has_perm('halld.move_sourcedata', source_data):
             raise PermissionDenied
