@@ -284,7 +284,7 @@ class Source(models.Model, StaleFieldsMixin):
         return True
 
     def get_absolute_url(self):
-        return reverse('halld:source-detail', args=[self.resource.type, self.resource.identifier, self.source_id])
+        return reverse('halld:source-detail', args=[self.resource.type, self.resource.identifier, self.type_id])
 
     def get_type(self):
         return get_source_type(self.type_id)
