@@ -17,7 +17,7 @@ class Types(Inference):
         for source in resource.source_set.all():
             if not source.deleted:
                 types |= source.get_type().get_contributed_types(source, source.data)
-        data['@types'] = list(types)
+        data['@type'] = list(types)
         return data
 
 class Identifiers(Inference):
