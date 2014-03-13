@@ -258,6 +258,7 @@ class SourceType(models.Model):
 class Source(models.Model, StaleFieldsMixin):
     resource = models.ForeignKey(Resource)
     type = models.ForeignKey(SourceType)
+    href = models.CharField(max_length=2048, db_index=True)
 
     author = models.ForeignKey(User, related_name='author_of')
     committer = models.ForeignKey(User, related_name='committer_of')
@@ -290,6 +291,8 @@ class Source(models.Model, StaleFieldsMixin):
 
     def save(self, *args, **kwargs):
         changed_values = self.get_changed_values()
+        if not self.pk:
+            self.href = self.resource.href + '/source/' + self.type_id
         if 'data' in changed_values:
             self.version += 1
             super(Source, self).save()
