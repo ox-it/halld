@@ -24,7 +24,11 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def get_inferences(self):
-        return []
+        from .. import inference
+        return [
+            inference.Identifiers(),
+            inference.Types(),
+        ]
     
     def generate_identifier(self):
         return uuid.uuid4().hex
