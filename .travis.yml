@@ -3,7 +3,7 @@ python:
   - "3.3"
 install:
   - pip install -r requirements-travis.txt
-  - pip install coveralls
+  - pip install coveralls mock
 script: PYTHONPATH=. coverage run --source=. `which django-admin.py` test halld.test --settings=halld.test_site.settings_sqlite3
 after_script:
   - coveralls
