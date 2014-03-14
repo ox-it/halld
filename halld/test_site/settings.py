@@ -22,8 +22,9 @@ LINK_TYPES = [
 
 SOURCE_TYPES = [
     SourceTypeDefinition.new('science'),
+    SourceTypeDefinition.new('mythology'),
 ]
 
-BASE_URL = 'http://example.com/'
+BASE_URL = 'http://testserver/'
 
 ROOT_URLCONF = 'halld.test_site.urls'

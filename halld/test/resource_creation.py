@@ -25,8 +25,8 @@ class ResourceHALTestCase(TestCase):
         with self.assertRaises(exceptions.SourceDataWithoutResource) as cm:
             self.source_view(request, 'snake', 'python', 'science')
 
-        self.assertIsInstance(cm.exception.resource_type, registry.SnakeResourceTypeDefinition)
-        self.assertEqual(cm.exception.identifier, 'python')
+        self.assertEqual(set(cm.exception.hrefs),
+                         {'http://testserver/snake/python'})
 
     def testForbiddenIdentifierAssignment(self):
         identifier = uuid.uuid4().hex

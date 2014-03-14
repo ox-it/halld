@@ -1,6 +1,7 @@
 from collections import defaultdict
 import copy
 import datetime
+import hashlib
 import itertools
 import logging
 from urllib.parse import urljoin
@@ -35,7 +36,7 @@ class ResourceType(models.Model):
         return self.name
 
 class Resource(models.Model, StaleFieldsMixin):
-    href = models.CharField(max_length=2048, db_index=True, blank=True)
+    href = models.CharField(max_length=2048, primary_key=True)
     type = models.ForeignKey(ResourceType)
     identifier = models.SlugField()
     uri = models.CharField(max_length=1024, db_index=True, blank=True)
@@ -58,6 +59,9 @@ class Resource(models.Model, StaleFieldsMixin):
         point = models.PointField(null=True, blank=True)
         geometry = models.GeometryField(null=True, blank=True)
 
+    def get_etag(self):
+        return hashlib.sha1("{}/{}".format(self.href, self.version).encode()).hexdigest()
+
     def regenerate(self):
         raw_data = {'@source': {},
                     'href': self.get_absolute_url()}
@@ -72,12 +76,13 @@ class Resource(models.Model, StaleFieldsMixin):
         if not raw_data.get('@id'):
             raw_data['@id'] = self.get_absolute_uri(raw_data)
         del raw_data['@source']
-
+                                   
         self.raw_data = copy.deepcopy(raw_data)
 
     def save(self, *args, **kwargs):
-        has_pk = self.pk is not None
-        self.href = self.get_type().base_url + self.identifier
+        created = not self.pk
+        if not self.href:
+            self.href = self.get_type().base_url + self.identifier
         if kwargs.pop('regenerate', True) is not False:
             self.regenerate()
         regenerated = {self} | kwargs.pop('regenerated', set())
@@ -95,10 +100,10 @@ class Resource(models.Model, StaleFieldsMixin):
                                  'version': self.version}
 
             super(Resource, self).save()
-            if has_pk:
-                signals.resource_changed.send(self, old_data=changed_values['data'])
-            else:
+            if created:
                 signals.resource_created.send(self)
+            else:
+                signals.resource_changed.send(self, old_data=changed_values['data'])
 
             for resource in cascade_to:
                 resource.save(regenerated=regenerated)
@@ -237,7 +242,7 @@ class Resource(models.Model, StaleFieldsMixin):
     def filter_data(self, user, data=None):
         data = data if data is not None else self.data
         return data
-    
+
     def __str__(self):
         if 'label' in self.data:
             return '{} ("{}")'.format(self.href, self.data['label'])
@@ -256,9 +261,9 @@ class SourceType(models.Model):
         return self.name
 
 class Source(models.Model, StaleFieldsMixin):
+    href = models.CharField(max_length=2048, primary_key=True)
     resource = models.ForeignKey(Resource)
     type = models.ForeignKey(SourceType)
-    href = models.CharField(max_length=2048, db_index=True)
 
     author = models.ForeignKey(User, related_name='author_of')
     committer = models.ForeignKey(User, related_name='committer_of')
@@ -267,21 +272,21 @@ class Source(models.Model, StaleFieldsMixin):
     modified = models.DateTimeField(auto_now=True)
 
     data = JSONField(default={}, blank=True)
-    version = models.PositiveIntegerField(default=1)
+    version = models.PositiveIntegerField(default=0)
     deleted = models.BooleanField(default=False)
 
     def get_etag(self):
-        return "{}/{}/{}/{}".format(self.resource.type,
-                                    self.resource.identifier,
-                                    self.source_id,
-                                    self.version)
+        return hashlib.sha1("{}/{}".format(self.href, self.version).encode()).hexdigest()
 
     def filter_data(self, user, data=None):
         data = data if data is not None else self.data
-        return data
+        return self.get_type().filter_data(user, self, data)
 
     def patch_acceptable(self, user, patch):
-        return True
+        return self.get_type().patch_acceptable(user, self, patch)
+    
+    def get_hal(self, user):
+        return self.get_type().get_hal(self, self.filter_data(user))
 
     def get_absolute_url(self):
         return reverse('halld:source-detail', args=[self.resource.type, self.resource.identifier, self.type_id])
@@ -290,19 +295,36 @@ class Source(models.Model, StaleFieldsMixin):
         return get_source_type(self.type_id)
 
     def save(self, *args, **kwargs):
+        created = not self.pk
         changed_values = self.get_changed_values()
-        if not self.pk:
-            self.href = self.resource.href + '/source/' + self.type_id
-        if 'data' in changed_values:
+        if not self.href:
+            self.href = self.resource_id + '/source/' + self.type_id
+
+        if 'deleted' in changed_values:
+            if self.deleted:
+                self.data = {}
+                self.version += 1
+                self.modified = datetime.datetime.utcnow()
+                super(Source, self).save(*args, **kwargs)
+                signals.source_deleted.send(self)
+                return
+            elif not self.deleted:
+                # Special-case resurrecting old Sources
+                created = True
+                changed_values['data'] = {}
+                
+        if created or 'data' in changed_values:
             self.version += 1
-            super(Source, self).save()
-            if not self.pk:
-                signals.sourcedata_created.send(self)
+            self.created = self.created or datetime.datetime.utcnow()
+            self.modified = datetime.datetime.utcnow()
+            super(Source, self).save(*args, **kwargs)
+            if created:
+                signals.source_created.send(self)
             else:
-                signals.sourcedata_changed.send(self, old_data=changed_values['data'])
+                signals.source_changed.send(self, old_data=changed_values['data'])
             self.resource.save()
         elif self.is_stale:
-            super(Source, self).save()
+            super(Source, self).save(*args, **kwargs)
 
 class LinkType(models.Model):
     name = models.SlugField(primary_key=True)

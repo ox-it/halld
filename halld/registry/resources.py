@@ -22,6 +22,11 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
         from django.conf import settings
         return '{}{}/'.format(settings.BASE_URL, self.name)
 
+    @property
+    def href(self):
+        from django.conf import settings
+        return '{}{}'.format(settings.BASE_URL, self.name)
+
     @abc.abstractmethod
     def get_inferences(self):
         from .. import inference
@@ -105,14 +110,24 @@ def get_resource_types():
         return _local.resource_types
     except AttributeError:
         from django.conf import settings
-        resource_types = {}
+        resource_types, resource_types_by_href = {}, {}
         for resource_type in settings.RESOURCE_TYPES:
             if isinstance(resource_type, str):
                 mod_name, attr_name = resource_type.rsplit('.', 1)
                 resource_type = getattr(importlib.import_module(mod_name), attr_name)()
             resource_types[resource_type.name] = resource_type
+            resource_types_by_href[resource_type.href] = resource_type
         _local.resource_types = resource_types
+        _local.resource_types_by_href = resource_types_by_href
         return resource_types
 
 def get_resource_type(name):
     return get_resource_types()[name]
+
+def get_resource_types_by_href():
+    get_resource_types()
+    return _local.resource_types_by_href
+
+def get_resource_type_by_href(href):
+    get_resource_types()
+    return _local.resource_types_by_href[href]

@@ -63,20 +63,27 @@ class LinkTargetDoesNotExist(HALLDException):
         hal['link_name'] = self.link_type.name
         return hal
 
+class NoSuchSource(HALLDException):
+    name = 'no-such-source'
+    description = "You are attempting to view or update source data that doesn't yet exist. Create it with PUT first."
+    status_code = http.client.NOT_FOUND
+
 class SourceDataWithoutResource(HALLDException):
     name = 'source-data-without-resource'
     description = 'You are attempting to view or update source data for a resource that does not exist. You should make sure the resource exists before trying again.'
     status_code = http.client.NOT_FOUND
 
-    def __init__(self, resource_type, identifier):
-        self.resource_type, self.identifier = resource_type, identifier
+    def __init__(self, hrefs):
+        if isinstance(hrefs, str):
+            hrefs = [hrefs]
+        self.hrefs = hrefs
 
     def as_hal(self):
         hal = super(SourceDataWithoutResource, self).as_hal()
         hal['_links'] = {
-            'missingResource': {
-                'href': reverse('halld:resource', args=[self.resource_type.name, self.identifier]),
-            },
+            'missingResources': [{
+                'href': href,
+            } for href in self.hrefs],
         }
         return hal
 
