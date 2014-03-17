@@ -276,8 +276,11 @@ class SourceView(JSONView, JSONRequestMixin):
     def do_patch(self, request, source, patch):
         proposed = request.META.get('HTTP_X_PROPOSED') == 'yes' \
                 or request.GET.get('proposed') == 'yes'
-        
-        if not patch and source.pk:
+
+        # If there's no patch then there's nothing to be done unless
+        # this is the first time this Source has been saved, or we're
+        # resurrecting it (i.e. deleted is going from True to False)
+        if not patch and source.pk and not source.deleted:
             return HttpResponse(status=http.client.NO_CONTENT)
 
         if proposed:

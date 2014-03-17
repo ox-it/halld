@@ -66,26 +66,48 @@ class SourceTestCase(TestCase):
         self.assertEqual(source_data['_meta']['sourceType'], 'science')
         self.assertEqual(source_data['_meta']['version'], 1) # only just created
 
+    @mock.patch('halld.signals.source_created')
     @mock.patch('halld.signals.source_deleted')
-    def testDeleteSource(self, source_deleted):
+    def testDeleteAndResurrectSource(self, source_deleted, source_created):
         _, source_href, identifier = self.create_resource()
-        
+
+        # Create a source
         request = self.factory.put('/snake/{}/source/science'.format(identifier),
                                    data=json.dumps({}),
                                    content_type='application/json')
         request.user = self.user
         self.source_view(request, 'snake', identifier, 'science')
-        
+
+        # Delete it
         request = self.factory.delete('/snake/{}/source/science'.format(identifier))
         request.user = self.user
         response = self.source_view(request, 'snake', identifier, 'science')
 
         assert source_deleted.send.called
-
         self.assertEqual(response.status_code, http.client.NO_CONTENT)
-        
+
+        # Check it's gone
         request = self.factory.get('/snake/{}/source/science'.format(identifier))
         request.user = self.user
         response = self.source_view(request, 'snake', identifier, 'science')
-        
+
         self.assertEqual(response.status_code, http.client.GONE)
+
+        # Recreate it
+        request = self.factory.put('/snake/{}/source/science'.format(identifier),
+                                   data=json.dumps({}),
+                                   content_type='application/json')
+        request.user = self.user
+        response = self.source_view(request, 'snake', identifier, 'science')
+        self.assertEqual(response.status_code, http.client.OK)
+        assert source_created.send.called
+
+        # And check it's there
+        request = self.factory.get('/snake/{}/source/science'.format(identifier))
+        request.user = self.user
+        response = self.source_view(request, 'snake', identifier, 'science')
+        self.assertEqual(response.status_code, http.client.OK)
+        
+        source_data = json.loads(response.content.decode())
+        # Version 2 was the deleted version, so this should be version 3
+        self.assertEqual(source_data['_meta']['version'], 3)
