@@ -131,3 +131,24 @@ class SourceTestCase(TestCase):
 
         assert source_deleted.send.called
         self.assertEqual(response.status_code, http.client.NO_CONTENT)
+
+    @mock.patch('halld.signals.source_created')
+    def testPuttingNonDicts(self, source_created):
+        _, source_href, identifier = self.create_resource()
+
+        bad_data = (
+            ['cat'],
+            'hello',
+            5,
+            True,
+            False,
+        )
+
+        for data in bad_data:
+            request = self.factory.put('/snake/{}/source/science'.format(identifier),
+                                       data=json.dumps(data),
+                                       content_type='application/json')
+            request.user = self.user
+            response = self.source_view(request, 'snake', identifier, 'science')
+            assert not source_created.called
+            self.assertEqual(response.status_code, http.client.BAD_REQUEST)
