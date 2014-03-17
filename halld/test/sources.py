@@ -107,7 +107,27 @@ class SourceTestCase(TestCase):
         request.user = self.user
         response = self.source_view(request, 'snake', identifier, 'science')
         self.assertEqual(response.status_code, http.client.OK)
-        
+
         source_data = json.loads(response.content.decode())
         # Version 2 was the deleted version, so this should be version 3
         self.assertEqual(source_data['_meta']['version'], 3)
+
+    @mock.patch('halld.signals.source_deleted')
+    def testDeleteWithNull(self, source_deleted):
+        _, source_href, identifier = self.create_resource()
+
+        # Create a source
+        request = self.factory.put('/snake/{}/source/science'.format(identifier),
+                                   data=json.dumps({}),
+                                   content_type='application/json')
+        request.user = self.user
+        self.source_view(request, 'snake', identifier, 'science')
+
+        request = self.factory.put('/snake/{}/source/science'.format(identifier),
+                                   data=json.dumps(None),
+                                   content_type='application/json')
+        request.user = self.user
+        response = self.source_view(request, 'snake', identifier, 'science')
+
+        assert source_deleted.send.called
+        self.assertEqual(response.status_code, http.client.NO_CONTENT)
