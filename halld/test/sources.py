@@ -149,6 +149,7 @@ class SourceTestCase(TestCase):
                                        data=json.dumps(data),
                                        content_type='application/json')
             request.user = self.user
-            response = self.source_view(request, 'snake', identifier, 'science')
+
+            with self.assertRaises(exceptions.SourceValidationFailed):
+                self.source_view(request, 'snake', identifier, 'science')
             assert not source_created.called
-            self.assertEqual(response.status_code, http.client.BAD_REQUEST)

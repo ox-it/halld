@@ -87,6 +87,10 @@ class SourceDataWithoutResource(HALLDException):
         }
         return hal
 
+class SourceValidationFailed(HALLDException):
+    name = 'source-validation-failed'
+    description = 'The source data you uploaded is invalid'
+
 class NoSuchSourceType(HALLDException):
     name = 'no-such-source-type'
     description = 'There is no such source type'

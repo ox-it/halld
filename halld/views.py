@@ -412,6 +412,8 @@ class SourceDetailView(VersioningMixin, SourceView):
         data = self.get_request_json('application/json')
         if data is None: # PUT null to delete a source
             return self.delete(request, source)
+        if not isinstance(data, dict):
+            raise exceptions.SourceValidationFailed
         old_data = source.filter_data(request.user)
         patch = jsonpatch.make_patch(old_data, data)
         self.do_patch(request, source, patch)
