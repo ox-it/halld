@@ -104,6 +104,16 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
     def user_can_assign_identifier(self, user, identifier):
         return False
 
+    def filter_data(self, user, source, data):
+        return data
+
+class DefaultFilteredResourceTypeDefinition(ResourceTypeDefinition):
+    """
+    Subclass this to not expose any data by default.
+    """
+    def filter_data(self, user, source, data):
+        return {}
+
 _local = threading.local()
 def get_resource_types():
     try:

@@ -241,7 +241,9 @@ class Resource(models.Model, StaleFieldsMixin):
 
     def filter_data(self, user, data=None):
         data = data if data is not None else self.data
-        return data
+        if user.is_superuser:
+            return data
+        return self.get_type().filter_data(user, self, data)
 
     def __str__(self):
         if 'label' in self.data:
@@ -280,6 +282,8 @@ class Source(models.Model, StaleFieldsMixin):
 
     def filter_data(self, user, data=None):
         data = data if data is not None else self.data
+        if user.is_superuser:
+            return data
         return self.get_type().filter_data(user, self, data)
 
     def patch_acceptable(self, user, patch):
