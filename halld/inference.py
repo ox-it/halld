@@ -49,15 +49,21 @@ class FirstOf(FromPointers):
                 pass
 
 class Set(FromPointers):
+    """
+    Inference that unions the data from a set of source pointers.
+    
+    Source values that aren't lists are converted to one-element lists, and
+    the results are sorted. An optional `append` argument can be passed to the
+    constructor, which includes the pre-existing values at the target in the
+    result.
+    """
     def __init__(self, target, *pointers, append=False):
-        self.append = append
+        if append:
+            pointers += (target,)
         super(Set, self).__init__(target, *pointers)
 
     def __call__(self, resource, data):
-        if self.append:
-            result = set(jsonpointer.resolve_pointer(data, self.target, ()))
-        else:
-            result = set() 
+        result = set()
         for pointer in self.pointers:
             value = jsonpointer.resolve_pointer(data, pointer, [])
             if not isinstance(value, (list, set)):

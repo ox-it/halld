@@ -28,3 +28,23 @@ class InferenceTestCase(TestCase):
                            'two': 'goodbye'}}
         first_of(resource, data)
         self.assertEqual(data.get('target'), 'hello')
+
+    def testSet(self):
+        resource = mock.Mock()
+        set_inference = inference.Set('/target', '/source/one', '/source/two')
+        
+        # these should come back sorted
+        data = {'source': {'one': ['Dog', 'Cat'], 'two': 'Mouse'}}
+        set_inference(resource, data)
+        self.assertEqual(data.get('target'),
+                         ['Cat', 'Dog', 'Mouse'])
+
+    def testSetAppend(self):
+        resource = mock.Mock()
+        set_inference = inference.Set('/target', '/source/one', '/source/two', append=True)
+
+        data = {'target': 'Horse',
+                'source': {'one': ['Dog', 'Cat'], 'two': 'Mouse'}}
+        set_inference(resource, data)
+        self.assertEqual(data.get('target'),
+                         ['Cat', 'Dog', 'Horse', 'Mouse'])
