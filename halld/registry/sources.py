@@ -82,7 +82,7 @@ class SchemaValidatedSourceTypeDefinition(SourceTypeDefinition):
                     _local.schemas[self.name] = ujson.load(f)
             else:
                 raise AssertionError("Unexpected schema type ({0}) for source type {1}".format(type(self.schema),
-
+                                                                                               self.name))
             return _local.schemas[self.name]
 
     def validate_data(self, source, data):
