@@ -44,7 +44,7 @@ class FirstOf(FromPointers):
             try:
                 result = jsonpointer.resolve_pointer(data, pointer)
                 jsonpointer.set_pointer(data, self.target, result)
-                break
+                return
             except jsonpointer.JsonPointerException:
                 pass
 

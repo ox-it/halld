@@ -17,6 +17,8 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
     def name(self):
         pass
     
+    allowable_source_types = None # Allow all by default
+
     @property
     def base_url(self):
         from django.conf import settings

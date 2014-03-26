@@ -56,9 +56,9 @@ class LinkTargetDoesNotExist(HALLDException):
     def as_hal(self):
         hal = super(LinkTargetDoesNotExist, self).as_hal()
         hal['_links'] = {
-            'missingResource': {
+            'missingResources': [{
                 'href': self.href,
-            },
+            }],
         }
         hal['link_name'] = self.link_type.name
         return hal
@@ -67,6 +67,38 @@ class NoSuchSource(HALLDException):
     name = 'no-such-source'
     description = "You are attempting to view or update source data that doesn't yet exist. Create it with PUT first."
     status_code = http.client.NOT_FOUND
+
+class IncompatibleSourceType(HALLDException):
+    name = 'incompatible-source-type'
+    description = "Sources of this type may not be attached to this type of resource"
+    status_code = http.client.NOT_FOUND
+
+    def __init__(self, resource_type, source_type):
+        self.source_type, self.resource_type = source_type, resource_type
+
+    def as_hal(self):
+        hal = super(IncompatibleSourceType, self).as_hal()
+        hal['resourceType'] = self.resource_type
+        hal['sourceType'] = self.source_type
+        return hal
+
+class SourceValidationError(HALLDException):
+    name = 'source-validation-failed'
+    description = "The data you provided failed validation. Please consult the documentation for more details."
+    status_code = http.client.BAD_REQUEST
+
+    def __init__(self, message=None, path=None, schema_path=None):
+        self.message, self.path, self.schema_path = message, path, schema_path
+
+    def as_hal(self):
+        hal = super(SourceValidationError, self).as_hal()
+        if self.message is not None:
+            hal['message'] = self.message
+        if self.path is not None:
+            hal['path'] = self.path
+        if self.schema_path is not None:
+            hal['schemaPath'] = self.schema_path
+        return hal
 
 class SourceDataWithoutResource(HALLDException):
     name = 'source-data-without-resource'

@@ -86,6 +86,7 @@ class JSONRequestMixin(View):
 
 class HALLDView(ContentNegotiatedView):
     _default_format = 'hal'
+    _include_renderer_details_in_context = False
 
     @renderer(format='jsonld', mimetypes=('application/ld+json',), name='JSON-LD')
     def render_jsonld(self, request, context, template_name):
@@ -109,6 +110,10 @@ class IndexView(HTMLView, HALLDView):
                 'href': reverse('halld:resource-type', args=[resource_type.name])}
             for resource_type in get_resource_types().values()
         }
+        self.context['_links'].update({
+            'findSource': {'href': '/{resourceType}/{identifier}/source/{source}',
+                           'templated': True},
+        })
         return self.render()
 
 class ResourceTypeView(HALLDView):
@@ -294,6 +299,7 @@ class SourceView(JSONView, JSONRequestMixin):
         patched = jsonpatch.apply_patch(source.data, patch)
         if not source.patch_acceptable(request.user, patch):
             raise PermissionDenied
+        source.validate_data(patched)
         filtered_patched = source.filter_data(request.user, patched)
         if patched != filtered_patched:
             raise PermissionDenied
@@ -389,6 +395,10 @@ class SourceDetailView(VersioningMixin, SourceView):
         require_preexisting = request.method.lower() not in {'put'}
         source = self.source_for_href(request.build_absolute_uri(),
                                       require_preexisting)
+
+        allowed_source_types = get_resource_type(resource_type).allowed_source_types
+        if allowed_source_types is not None and source_type not in allowed_source_types:
+            raise exceptions.IncompatibleSourceType(resource_type, source_type)
 
         return super(SourceDetailView, self).dispatch(request, source)
 

@@ -83,6 +83,8 @@ class Resource(models.Model, StaleFieldsMixin):
         created = not self.pk
         if not self.href:
             self.href = self.get_type().base_url + self.identifier
+        if created:
+            super(Resource, self).save(*args, **kwargs)
         if kwargs.pop('regenerate', True) is not False:
             self.regenerate()
         regenerated = {self} | kwargs.pop('regenerated', set())
@@ -288,6 +290,9 @@ class Source(models.Model, StaleFieldsMixin):
 
     def patch_acceptable(self, user, patch):
         return self.get_type().patch_acceptable(user, self, patch)
+
+    def validate_data(self, data):
+        return self.get_type().validate_data(self, data)
     
     def get_hal(self, user):
         return self.get_type().get_hal(self, self.filter_data(user))

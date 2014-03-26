@@ -2,6 +2,12 @@ import abc
 import copy
 import importlib
 import threading
+import ujson
+
+import jsonpointer
+import jsonschema
+
+from halld import exceptions
 
 class SourceTypeDefinition(object, metaclass=abc.ABCMeta):
     @abc.abstractproperty
@@ -12,10 +18,10 @@ class SourceTypeDefinition(object, metaclass=abc.ABCMeta):
     def get_contributed_types(self, source, data):
         return self.contributed_types
 
-    @staticmethod
-    def new(name, contributed_types=frozenset()):
+    @classmethod
+    def new(cls, name, contributed_types=frozenset()):
         source_type = type(name.title() + 'SourceTypeDefinition',
-                           (SourceTypeDefinition,),
+                           (cls,),
                            {'name': name,
                             'contributed_types': contributed_types})
         return source_type()
@@ -43,6 +49,49 @@ class SourceTypeDefinition(object, metaclass=abc.ABCMeta):
 
     def patch_acceptable(self, user, source, patch):
         return True
+
+    def validate_data(self, source, data):
+        """
+        Override to perform validation, and raise a HALLDException if it fails.
+        """
+
+class SchemaValidatedSourceTypeDefinition(SourceTypeDefinition):
+    @abc.abstractproperty
+    def schema(self): pass
+
+    @classmethod
+    def new(cls, name, contributed_types=frozenset(), schema=None):
+        source_type = type(name.title() + 'SourceTypeDefinition',
+                           (cls,),
+                           {'name': name,
+                            'contributed_types': contributed_types,
+                            'schema': schema})
+        return source_type()
+
+    @property
+    def _schema(self):
+        try:
+            return _local.schemas[self.name]
+        except (AttributeError, KeyError):
+            if not hasattr(_local, 'schemas'):
+                _local.schemas = {}
+            if isinstance(self.schema, dict):
+                _local.schemas[self.name] = self.schema
+            elif isinstance(self.schema, str):
+                with open(self.schema, 'r') as f:
+                    _local.schemas[self.name] = ujson.load(f)
+            else:
+                raise AssertionError("Unexpected schema type ({0}) for source type {1}".format(type(self.schema),
+
+            return _local.schemas[self.name]
+
+    def validate_data(self, source, data):
+        try:
+            jsonschema.validate(data, self._schema)
+        except jsonschema.ValidationError as e:
+            raise exceptions.SourceValidationError(e.message,
+                                                   jsonpointer.JsonPointer.from_parts(e.path).path,
+                                                   jsonpointer.JsonPointer.from_parts(e.schema_path).path)
 
 _local = threading.local()
 def get_source_types():
