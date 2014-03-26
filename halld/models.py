@@ -321,7 +321,7 @@ class Source(models.Model, StaleFieldsMixin):
                 # Special-case resurrecting old Sources
                 created = True
                 changed_values['data'] = {}
-                
+
         if created or 'data' in changed_values:
             self.version += 1
             self.created = self.created or datetime.datetime.utcnow()

@@ -16,8 +16,8 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
     @abc.abstractproperty
     def name(self):
         pass
-    
-    allowable_source_types = None # Allow all by default
+
+    allowed_source_types = None # Allow all by default
 
     @property
     def base_url(self):
@@ -36,7 +36,7 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
             inference.Identifiers(),
             inference.Types(),
         ]
-    
+
     def generate_identifier(self):
         return uuid.uuid4().hex
 
@@ -81,7 +81,7 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
                     add_to[link_type.name] = other_data
                 else:
                     add_to[link_type.name].append(other_data)
-            
+
             links['self'] = {'href': resource.get_absolute_url(),
                              '@id': resource.uri}
             hal['_links'] = dict(links)
