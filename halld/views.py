@@ -14,7 +14,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.core.urlresolvers import reverse
-from django.http import HttpResponse, HttpResponsePermanentRedirect, HttpResponseNotModified, Http404
+from django.http import HttpResponse, HttpResponsePermanentRedirect, HttpResponseRedirect, HttpResponseNotModified, Http404
 from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
 from django.views.generic import View
@@ -457,7 +457,7 @@ class IdView(View):
         return HttpResponseSeeOther(reverse('resource', args=[resource_type, identifier]))
 
 class ByIdentifierView(View):
-    def get(self, request):
+    def dispatch(self, request):
         try:
             scheme, value = request.GET['scheme'], request.GET['value']
         except KeyError:
@@ -466,3 +466,4 @@ class ByIdentifierView(View):
             identifier = Identifier.objects.get(scheme=scheme, value=value)
         except Identifier.DoesNotExist:
             raise exceptions.NoSuchIdentifier(scheme=scheme, value=value)
+        return HttpResponseRedirect(identifier.resource.get_absolute_url())

@@ -24,4 +24,7 @@ urlpatterns = patterns('',
     url(r'^id/(?P<resource_type>[a-z\-]+)/(?P<identifier>[a-z\-\d]+)$',
         views.IdView.as_view(),
         name='id'),
+    url(r'^by-identifier$',
+        views.ByIdentifierView.as_view(),
+        name='by-identifier')
 )
