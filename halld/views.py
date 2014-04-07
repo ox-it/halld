@@ -159,9 +159,6 @@ class ResourceTypeView(HALLDView):
         return HttpResponseCreated(resource.get_absolute_url())
         
 class ResourceView(HALLDView):
-
-    http_method_names = HALLDView.http_method_names + ['patch', 'link', 'unlink']
-
     def dispatch(self, request, resource_type, identifier, **kwargs):
         try:
             resource_type = get_resource_type(resource_type)
@@ -328,7 +325,6 @@ class BulkSourceUpdateView(SourceView):
 class SourceListView(SourceView):
     @method_decorator(login_required)
     def dispatch(self, request, resource_type, identifier, **kwargs):
-        print (resource_type)
         try:
             resource_type = get_resource_type(resource_type)
         except KeyError:
