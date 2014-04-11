@@ -2,8 +2,6 @@ import abc
 
 import jsonpointer
 
-from halld.registry import get_resource_types
-
 class Inference(metaclass=abc.ABCMeta):
     inferred_keys = ()
 
@@ -18,18 +16,6 @@ class Types(Inference):
             if not source.deleted:
                 types |= source.get_type().get_contributed_types(source, source.data)
         data['@type'] = list(types)
-        return data
-
-class Identifiers(Inference):
-    def __call__(self, resource, data):
-        data['identifier'] = {}
-        data['identifier'].update(resource.get_type().get_identifiers(resource, data))
-        data['identifier'][resource.type_id] = resource.identifier
-        # Don't copy type name identifiers
-        for resource_type in get_resource_types().values():
-            if resource_type.name != resource.type_id:
-                data['identifier'].pop(resource_type.name, None)
-        data['identifier']['uri'] = resource.get_absolute_uri(data)
         return data
 
 class FromPointers(Inference):

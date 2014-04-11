@@ -1,7 +1,7 @@
 import abc
 import http.client
 
-from django.core.urlresolvers import reverse
+import jsonpointer
 
 class HALLDException(Exception, metaclass=abc.ABCMeta):
     @abc.abstractproperty
@@ -83,12 +83,19 @@ class IncompatibleSourceType(HALLDException):
         return hal
 
 class SourceValidationError(HALLDException):
-    name = 'source-validation-failed'
+    name = 'data-validation-failed'
     description = "The data you provided failed validation. Please consult the documentation for more details."
     status_code = http.client.BAD_REQUEST
 
-    def __init__(self, message=None, path=None, schema_path=None):
-        self.message, self.path, self.schema_path = message, path, schema_path
+class SchemaValidationError(SourceValidationError):
+    name = 'schema-validation-failed'
+    description = "The data you provided failed schema validation. Please consult the documentation for more details."
+    status_code = http.client.BAD_REQUEST
+
+    def __init__(self, e):
+        self.message = e.message
+        self.path = jsonpointer.JsonPointer.from_parts(e.path).path,
+        self.schema_path = jsonpointer.JsonPointer.from_parts(e.schema_path).path
 
     def as_hal(self):
         hal = super(SourceValidationError, self).as_hal()
@@ -133,7 +140,7 @@ class NoSuchSourceType(HALLDException):
 
     def as_hal(self):
         hal = super(NoSuchSourceType, self).as_hal()
-        hal['sourceType'] = self.source_type
+        hal['sourceType'] = list(self.source_type)
         return hal
 
 class NoSuchIdentifier(HALLDException):
@@ -150,6 +157,23 @@ class NoSuchIdentifier(HALLDException):
         hal['value'] = self.value
         return hal
 
+class DuplicatedIdentifier(HALLDException):
+    name = 'duplicated-identifier'
+    description = 'The data you supplied implied an identifier that is already assigned to another resource.'
+    status_code = http.client.CONFLICT
+
+    def __init__(self, scheme, value):
+        self.scheme, self.value = scheme, value
+
+    def as_hal(self):
+        hal = super(DuplicatedIdentifier, self).as_hal()
+        hal['scheme'] = self.scheme
+        hal['value'] = self.value
+        from .models import Identifier
+        hal['_links'] = {'resource': Identifier.objects.get(scheme=self.scheme,
+                                                            value=self.value).resource_id}
+        return hal
+
 class ResourceAlreadyExists(HALLDException):
     name = 'resource-already-exists'
     description = "You're trying to create a resource that already exists."
@@ -157,3 +181,28 @@ class ResourceAlreadyExists(HALLDException):
     
     def __init__(self, resource):
         self.resource = resource
+
+class MissingContentType(HALLDException):
+    name = 'missing-content-type'
+    description = 'You must supply a Content-Type header.'
+    status_code = http.client.BAD_REQUEST
+
+class UnsupportedContentType(HALLDException):
+    name = 'unsupported-content-type'
+    description = 'You supplied an unsupported Content-Type with your request.'
+    status_code = http.client.BAD_REQUEST
+
+class UnsupportedRequestBodyEncoding(HALLDException):
+    name = 'unsupported-request-body-encoding'
+    description = 'You specified an unsupported request body encoding. Try UTF-8 instead.'
+    status_code = http.client.BAD_REQUEST
+
+class InvalidJSON(HALLDException):
+    name = 'invalid-json'
+    description = "The request body you supplied wasn't valid JSON"
+    status_code = http.client.BAD_REQUEST
+
+class InvalidEncoding(HALLDException):
+    name = 'invalid-encoding'
+    description = "The request body you supplied couldn't be decoded using the expected character encoding."
+    status_code = http.client.BAD_REQUEST

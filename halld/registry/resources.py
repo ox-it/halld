@@ -1,14 +1,13 @@
 import abc
 from collections import defaultdict
 import copy
-import itertools
 import re
 import threading
 import uuid
 import importlib
 
 from .links import get_link_types
-from ..permissions import VIEW_LINK
+from .sources import get_source_type
 
 uuid_re = re.compile('^[0-9a-f]{32}$')
 
@@ -17,7 +16,7 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
     def name(self):
         pass
 
-    allowed_source_types = None # Allow all by default
+    source_types = None # Allow all by default
 
     @property
     def base_url(self):
@@ -29,13 +28,15 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
         from django.conf import settings
         return '{}{}'.format(settings.BASE_URL, self.name)
 
-    @abc.abstractmethod
     def get_inferences(self):
+        inferences = []
+        if self.source_types is not None:
+            for source_type in self.source_types:
+                source_type= get_source_type(source_type)
+                inferences.extend(source_type.get_inferences())
         from .. import inference
-        return [
-            inference.Identifiers(),
-            inference.Types(),
-        ]
+        inferences.append(inference.Types())
+        return inferences
 
     def generate_identifier(self):
         return uuid.uuid4().hex
@@ -45,7 +46,7 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
         return [None]
 
     def get_identifiers(self, resource, data):
-        return {}
+        return dict(data.get('identifier', {}))
 
     contributed_types = frozenset()
     def get_contributed_types(self, resource, data):

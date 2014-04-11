@@ -26,6 +26,9 @@ class SourceTypeDefinition(object, metaclass=abc.ABCMeta):
                             'contributed_types': contributed_types})
         return source_type()
 
+    def get_inferences(self):
+        return []
+
     def get_hal(self, source, data):
         data = copy.copy(data)
         data['_meta'] = {'version': source.version,
@@ -89,9 +92,7 @@ class SchemaValidatedSourceTypeDefinition(SourceTypeDefinition):
         try:
             jsonschema.validate(data, self._schema)
         except jsonschema.ValidationError as e:
-            raise exceptions.SourceValidationError(e.message,
-                                                   jsonpointer.JsonPointer.from_parts(e.path).path,
-                                                   jsonpointer.JsonPointer.from_parts(e.schema_path).path)
+            raise exceptions.SchemaValidationError(e)
 
 _local = threading.local()
 def get_source_types():

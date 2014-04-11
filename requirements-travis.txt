@@ -7,7 +7,9 @@ jsonfield
 jsonpatch
 jsonpointer
 jsonschema
+Markdown
 python-dateutil
+pytz
 rdflib
 redis
 ujson

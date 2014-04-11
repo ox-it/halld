@@ -1,3 +1,4 @@
+import json
 import unittest
 import uuid
 
@@ -11,11 +12,13 @@ class IdentifiersTestCase(TestCase):
         self.by_identifier_view = views.ByIdentifierView.as_view()
 
     def testNotFound(self):
-        request = self.factory.get('/by-identifier',
-                                   {'scheme': 'thing',
-                                    'value': 'something'})
-        with self.assertRaises(exceptions.NoSuchIdentifier):
-            self.by_identifier_view(request)
+        query = {'scheme': 'thing',
+                 'values': ['something']}
+        request = self.factory.generic('POST',
+                                       '/by-identifier',
+                                       json.dumps(query),
+                                       content_type='application/json')
+        response = self.by_identifier_view(request)
 
     @unittest.expectedFailure
     def testIdentifierCreatedForResourceType(self):

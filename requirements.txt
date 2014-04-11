@@ -8,8 +8,10 @@ jsonfield
 jsonpatch
 jsonpointer
 jsonschema
+Markdown
 psycopg2
 python-dateutil
+pytz
 rdflib
 redis
 ujson

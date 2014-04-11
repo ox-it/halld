@@ -1,15 +1,15 @@
-from collections import defaultdict
 import copy
 import datetime
 import hashlib
-import itertools
 import logging
 from urllib.parse import urljoin
 
 from django.conf import settings
 from django.core.urlresolvers import reverse
 from django.contrib.auth.models import User
+from django.db import IntegrityError
 from jsonfield import JSONField
+import pytz
 import rdflib
 import ujson as json
 import dateutil.parser
@@ -17,7 +17,7 @@ from stalefields.stalefields import StaleFieldsMixin
 
 from . import signals, exceptions
 from .registry import get_link_types, get_link_type
-from .registry import get_resource_type
+from .registry import get_resource_types, get_resource_type
 from .registry import get_source_type
 from .conf import is_spatial_backend
 
@@ -28,6 +28,16 @@ else:
     from django.db import models
 
 logger = logging.getLogger(__name__)
+
+def now():
+    return pytz.utc.localize(datetime.datetime.utcnow())
+
+def localize(dt):
+    if isinstance(dt, str):
+        dt = dateutil.parser.parse(dt)
+    if not dt.tzinfo:
+        dt = pytz.timezone(settings.TIME_ZONE).localize(dt)
+    return dt
 
 class ResourceType(models.Model):
     name = models.SlugField(primary_key=True)
@@ -47,13 +57,13 @@ class Resource(models.Model, StaleFieldsMixin):
     version = models.PositiveIntegerField(default=0)
 
     deleted = models.BooleanField(default=False)
-    extant = models.BooleanField(default=True)
 
     created = models.DateTimeField(null=True, blank=True)
     modified = models.DateTimeField(null=True, blank=True)
 
     start_date = models.DateTimeField(null=True, blank=True)
     end_date = models.DateTimeField(null=True, blank=True)
+    extant = models.BooleanField(default=True)
 
     if is_spatial_backend:
         point = models.PointField(null=True, blank=True)
@@ -67,10 +77,10 @@ class Resource(models.Model, StaleFieldsMixin):
                     'href': self.get_absolute_url()}
         for source in self.source_set.all():
             raw_data['@source'][source.type_id] = copy.deepcopy(source.data)
-        inferences = self.get_inferences()
-        for inference in inferences:
+        self.collect_identifiers(raw_data)
+        for inference in self.get_inferences():
             inference(self, raw_data)
-        
+
         if not self.get_type().allow_uri_override:
             raw_data.pop('@id', None)
         if not raw_data.get('@id'):
@@ -94,8 +104,8 @@ class Resource(models.Model, StaleFieldsMixin):
 
         if 'data' in self.stale_fields:
             changed_values = self.get_changed_values()
-            self.created = self.created or datetime.datetime.utcnow()
-            self.modified = datetime.datetime.utcnow()
+            self.created = self.created or now()
+            self.modified = now()
             self.version += 1
             self.data['meta'] = {'created': self.created,
                                  'modified': self.modified,
@@ -112,7 +122,14 @@ class Resource(models.Model, StaleFieldsMixin):
         elif self.is_stale:
             super(Resource, self).save()
 
+        for date in [self.start_date, self.end_date]:
+            if date and date > now():
+                signals.request_future_resource_generation.send(self, when=date)
+                break
+
     def update_data(self):
+        self.update_denormalised_fields()
+
         cascade_to = set()
         cascade_to.update(l.target for l in Link.objects.filter(source=self).select_related('target') if l.target)
         cascade_to.update(self.update_links(self.raw_data))
@@ -120,6 +137,7 @@ class Resource(models.Model, StaleFieldsMixin):
         self.update_identifiers(self.raw_data)
 
         data = copy.deepcopy(self.raw_data)
+        data['@extant'] = self.extant
         for link_type in get_link_types().values():
             data.pop(link_type.name, None)
         self.data = data
@@ -129,15 +147,20 @@ class Resource(models.Model, StaleFieldsMixin):
     def update_denormalised_fields(self):
         self.uri = self.raw_data['@id']
         self.deleted = bool(self.raw_data.get('@deleted', False))
+        self.extant = self.raw_data.get('@extant', True)
         if '@startDate' in self.raw_data:
-            self.start_date = dateutil.parser.parse(self.raw_data['@endDate'])
+            self.start_date = localize(self.raw_data['@startDate'])
+            if self.start_date > now():
+                self.extant = False
         else:
             self.start_date = None
         if '@endDate' in self.raw_data:
-            self.end_date = dateutil.parser.parse(self.raw_data['@endDate'])
+            self.end_date = localize(self.raw_data['@endDate'])
+            if self.end_date <= now():
+                self.extant = False
         else:
             self.end_date = None
-
+        
         if is_spatial_backend:
             point = self.raw_data.get('@point')
             if isinstance(point, dict):
@@ -177,6 +200,8 @@ class Resource(models.Model, StaleFieldsMixin):
         link_data = set()
         hrefs = set()
         for name, links in self.get_type().get_link_data(data).items():
+            if isinstance(links, str):
+                links = [links]
             link_type = get_link_type(name)
             for link in links:
                 if isinstance(link, str):
@@ -184,21 +209,23 @@ class Resource(models.Model, StaleFieldsMixin):
                 link['href'] = urljoin(self.href, link['href'])
                 link_data.add((link['href'],
                                link_type.inverse_name if link_type.inverted else link_type.name,
-                               link_type.inverted))
+                               link_type.inverted,
+                               link_type.timeless or self.extant))
                 hrefs.add(link['href'])
 
         targets = {r.href: r for r in Resource.objects.filter(href__in=hrefs)}
 
         links = list(Link.objects.filter(source=self).select_related('target'))
         for link in links:
-            lid = link.target_href, link.type_id, link.inverted
+            lid = link.target_href, link.type_id, link.inverted, link.extant
             if lid in link_data:
                 link_data.remove(lid)
             else:
                 link.delete()
-        for href, link_name, inverted in link_data:
+        for href, link_name, inverted, _ in link_data:
+            link_type = get_link_type(link_name)
             target = targets.get(href)
-            if get_link_type(link_name).strict and not target:
+            if link_type.strict and not target:
                 raise exceptions.LinkTargetDoesNotExist(get_link_type(link_name), href)
             links.append(Link.objects.create(source=self,
                                              target=target,
@@ -206,23 +233,46 @@ class Resource(models.Model, StaleFieldsMixin):
                                              type_id=link_name,
                                              active=target if inverted else self,
                                              passive=self if inverted else target,
-                                             inverted=inverted))
+                                             inverted=inverted,
+                                             extant=link_type.timeless or (self.extant and target.extant)))
         return [l.target for l in links if l.target]
 
+    def collect_identifiers(self, data):
+        identifiers = data['identifier'] = {}
+        identifiers.update(self.get_type().get_identifiers(self, data))
+        identifiers[self.type_id] = self.identifier
+        for source in self.source_set.all():
+            if isinstance(source.data.get('identifier'), str):
+                identifiers['source:{}'.format(source.type_id)] = source.data['identifier']
+        # Don't copy type name identifiers
+        for resource_type in get_resource_types().values():
+            if resource_type.name != self.type_id:
+                identifiers.pop(resource_type.name, None)
+        identifiers['uri'] = self.get_absolute_uri(data)
+
     def update_identifiers(self, data):
-        identifiers = dict(data.get('identifier', {}))
+        if self.extant:
+            identifiers = data.get('identifier', {})
+        else:
+            identifiers = {}
         for current in Identifier.objects.filter(resource=self):
             if current.scheme not in identifiers:
                 current.delete()
                 continue
             elif current.value != identifiers[current.scheme]:
                 current.value = identifiers[current.scheme]
-                current.save()
+                try:
+                    current.save()
+                except IntegrityError:
+                    raise exceptions.DuplicatedIdentifier(current.scheme, current.value)
             del identifiers[current.scheme]
         for scheme, value in identifiers.items():
-            Identifier.objects.create(resource=self,
-                                      scheme=scheme,
-                                      value=value)
+            try:
+                Identifier.objects.create(resource=self,
+                                          scheme=scheme,
+                                          value=value)
+            except IntegrityError:
+                raise exceptions.DuplicatedIdentifier(scheme, value)
 
     def get_absolute_uri(self, data=None):
         data = data or self.data
@@ -349,11 +399,15 @@ class Link(models.Model):
     passive = models.ForeignKey(Resource, related_name='link_passive', null=True, blank=True)
     type = models.ForeignKey(LinkType)
     inverted = models.BooleanField()
+    extant = models.BooleanField(default=True)
 
 class Identifier(models.Model, StaleFieldsMixin):
     resource = models.ForeignKey(Resource, related_name='identifiers')
     scheme = models.SlugField()
     value = models.SlugField()
+    
+    class Meta:
+        unique_together = (('scheme', 'value'),)
 
     def save(self, *args, **kwargs):
         changed_values = self.get_changed_values()

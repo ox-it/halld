@@ -21,6 +21,7 @@ class LinkTypeDefinition(object, metaclass=abc.ABCMeta):
     inverse_subresource = False
     inverted = False
     strict = True
+    timeless = False
 
     @staticmethod
     def new(name, inverse_name,
@@ -28,7 +29,7 @@ class LinkTypeDefinition(object, metaclass=abc.ABCMeta):
             include=True, inverse_include=True,
             embed=False, inverse_embed=False,
             subresource=False, inverse_subresource=False,
-            inverted=False, strict=True):
+            inverted=False, strict=True, timeless=False):
         link = type(name.title() + 'LinkTypeDefinition', (LinkTypeDefinition,),
                     {'name': name,
                      'inverse_name': inverse_name,
@@ -41,7 +42,8 @@ class LinkTypeDefinition(object, metaclass=abc.ABCMeta):
                      'subresource': subresource,
                      'inverse_subresource': inverse_subresource,
                      'inverted': inverted,
-                     'strict': strict})
+                     'strict': strict,
+                     'timeless': timeless})
         return link()
 
     def inverse(self):
@@ -50,7 +52,7 @@ class LinkTypeDefinition(object, metaclass=abc.ABCMeta):
                                       self.inverse_include, self.include,
                                       self.inverse_embed, self.embed,
                                       self.inverse_subresource, self.subresource,
-                                      not self.inverted, self.strict)
+                                      not self.inverted, self.strict, self.timeless)
 
 _local = threading.local()
 def get_link_types():

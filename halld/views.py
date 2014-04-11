@@ -4,6 +4,7 @@ import copy
 import datetime
 import email.utils
 import http.client
+import urllib.parse
 import json
 import re
 from time import mktime
@@ -22,6 +23,7 @@ from django_conneg.decorators import renderer
 from django_conneg.http import HttpBadRequest, HttpResponseSeeOther, HttpError, HttpConflict, HttpGone, HttpResponseCreated
 from django_conneg.views import ContentNegotiatedView, HTMLView, JSONView
 import jsonpatch
+import jsonschema
 import ujson
 import rdflib
 from rdflib_jsonld.parser import to_rdf as parse_jsonld
@@ -61,28 +63,20 @@ class JSONRequestMixin(View):
         try:
             content_type, options = cgi.parse_header(self.request.META['CONTENT_TYPE'])
         except KeyError:
-            raise HttpError(http.client.BAD_REQUEST,
-                            "You must supply a Content-type header of {}".format(media_type))
+            raise exceptions.MissingContentType()
         if content_type != media_type:
-            raise HttpError(http.client.UNSUPPORTED_MEDIA_TYPE,
-                            "Content-type must be {0}.".format(media_type))
+            raise exceptions.UnsupportedContentType()
         charset = options.get('charset', 'utf-8')
         try:
             reader = codecs.getreader(charset)
         except LookupError:
-            raise HttpError(http.client.BAD_REQUEST,
-                            "Unsupported request body encoding.")
+            raise exceptions.UnsupportedRequestBodyEncoding()
         try:
             return ujson.load(reader(self.request))
         except ValueError:
-            raise HttpError(http.client.BAD_REQUEST,
-                            "Couldn't parse JSON from request body.")
+            raise exceptions.InvalidJSON()
         except UnicodeDecodeError:
-            raise HttpError(http.client.BAD_REQUEST,
-                            "Request body not correctly encoded.")
-        except LookupError:
-            raise HttpError(http.client.BAD_REQUEST,
-                            "Unsupported request body encoding.")
+            raise exceptions.InvalidEncoding()
 
 class HALLDView(ContentNegotiatedView):
     _default_format = 'hal'
@@ -111,8 +105,13 @@ class IndexView(HTMLView, HALLDView):
             for resource_type in get_resource_types().values()
         }
         self.context['_links'].update({
+            'findResourceType': {'href': '/{resourceType}',
+                           'templated': True},
+            'findResource': {'href': '/{resourceType}/{identifier}',
+                           'templated': True},
             'findSource': {'href': '/{resourceType}/{identifier}/source/{source}',
                            'templated': True},
+            'findByIdentifier': {'href': reverse('halld:by-identifier')}
         })
         return self.render()
 
@@ -392,8 +391,8 @@ class SourceDetailView(VersioningMixin, SourceView):
         source = self.source_for_href(request.build_absolute_uri(),
                                       require_preexisting)
 
-        allowed_source_types = get_resource_type(resource_type).allowed_source_types
-        if allowed_source_types is not None and source_type not in allowed_source_types:
+        source_types = get_resource_type(resource_type).source_types
+        if source_types is not None and source_type not in source_types:
             raise exceptions.IncompatibleSourceType(resource_type, source_type)
 
         return super(SourceDetailView, self).dispatch(request, source)
@@ -444,7 +443,7 @@ class SourceDetailView(VersioningMixin, SourceView):
         # TODO: Finish
         try:
             destination = request.META['HTTP_DESTINATION']
-            destination = urlparse.urlparse(destination)
+            destination = urllib.parse.urlparse(destination)
         except KeyError:
             raise HttpBadRequest
 
@@ -452,14 +451,53 @@ class IdView(View):
     def dispatch(self, request, resource_type, identifier):
         return HttpResponseSeeOther(reverse('resource', args=[resource_type, identifier]))
 
-class ByIdentifierView(View):
-    def dispatch(self, request):
+class ByIdentifierView(JSONRequestMixin):
+    schema = {
+        'properties': {
+            'scheme': {
+                'type': 'string',
+            },
+            'values': {
+                'type': 'array',
+                'items': {'type': 'string'},
+                'uniqueItems': True,
+            },
+            'includeData': {
+                'type': 'boolean',
+            },
+            'includeSources': {
+                'type': 'array',
+                'items': {'type': 'string'},
+                'uniqueItems': True,
+            },
+        },
+        'required': ['scheme', 'values'],
+    }
+    def post(self, request):
+        query = self.get_request_json()
         try:
-            scheme, value = request.GET['scheme'], request.GET['value']
-        except KeyError:
-            raise exceptions.MissingRequiredQueryParameters()
-        try:
-            identifier = Identifier.objects.get(scheme=scheme, value=value)
-        except Identifier.DoesNotExist:
-            raise exceptions.NoSuchIdentifier(scheme=scheme, value=value)
-        return HttpResponseRedirect(identifier.resource.get_absolute_url())
+            jsonschema.validate(query, self.schema)
+        except jsonschema.ValidationError as e:
+            raise exceptions.SchemaValidationError(e)
+        identifiers = Identifier.objects.filter(scheme=query['scheme'],
+                                                value__in=query['values']).select_related('resource')
+        if query.get('includeSources'):
+            identifiers = identifiers.select_related('resource__source_set')
+        seen_values = set()
+        results = {}
+        for identifier in identifiers:
+            resource = identifier.resource
+            result = {'type': resource.type_id, 'identifier': resource.identifier}
+            if query.get('includeData'):
+                data = resource.filter_data(request.user, resource.data)
+                result['data'] = resource.get_hal(request.user, data)
+            if query.get('includeSources'):
+                result['sources'] = {n: None for n in query['includeSources']}
+                sources = resource.source_set.filter(type_id__in=query['includeSources'])
+                for source in sources:
+                    result['sources'][source.type_id] = source.get_hal(request.user)
+            results[identifier.value] = result
+            seen_values.add(identifier.value)
+        for value in set(query['values']) - seen_values:
+            results[value] = None
+        return HttpResponse(json.dumps(results, indent=2), content_type='application/hal+json')

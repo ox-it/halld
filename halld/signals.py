@@ -4,6 +4,8 @@ resource_created = Signal()
 resource_changed = Signal(['old_data'])
 resource_deleted = Signal()
 
+request_future_resource_generation = Signal(['when'])
+
 source_created = Signal()
 source_moved = Signal()
 source_changed = Signal(['old_data'])
