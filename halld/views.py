@@ -130,8 +130,12 @@ class ResourceTypeView(HALLDView):
         except:
             page_num = 1
         page = paginator.page(page_num)
+        self.context.update(resource_type.get_type_properties())
         self.context.update({
             '@id': '',
+            'id': resource_type.name,
+            'label': resource_type.label,
+            'labelPlural': resource_type.label_plural,
             '_links': {
                 'first': {'href': '?page=1'},
                 'last': {'href': '?page={0}'.format(paginator.num_pages)},
