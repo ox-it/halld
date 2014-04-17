@@ -17,13 +17,13 @@ class SourceTestCase(TestCase):
         #self.source_type_view = views.SourceTypeView.as_view()
         self.source_list_view = views.SourceListView.as_view()
         self.source_view = views.SourceDetailView.as_view()
-        self.resource_view = views.ResourceView.as_view()
-        self.resource_type_view = views.ResourceTypeView.as_view()
+        self.resource_detail_view = views.ResourceDetailView.as_view()
+        self.resource_list_view = views.ResourceListView.as_view()
 
     def create_resource(self, source_type='science'):
         request = self.factory.post('/snake')
         request.user = self.user
-        response = self.resource_type_view(request, 'snake')
+        response = self.resource_list_view(request, 'snake')
         resource_href = response['Location']
         identifier = resource_href.rsplit('/', 1)[1]
         source_href = resource_href + '/source/science'
@@ -32,7 +32,7 @@ class SourceTestCase(TestCase):
     def testGetUncreatedSource(self):
         request = self.factory.post('/snake')
         request.user = self.user
-        response = self.resource_type_view(request, 'snake')
+        response = self.resource_list_view(request, 'snake')
         identifier = response['Location'].rsplit('/', 1)[1]
         
         request = self.factory.get('/snake/{}/source/science'.format(identifier))

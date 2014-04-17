@@ -16,6 +16,20 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
     def name(self):
         pass
 
+    @property
+    def label(self):
+        return self.name
+
+    @property
+    def label_plural(self):
+        return self.label + 's'
+
+    def get_type_properties(self):
+        """
+        Override to include additional properties in the type view.
+        """
+        return {}
+
     source_types = None # Allow all by default
 
     @property
