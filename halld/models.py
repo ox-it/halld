@@ -363,7 +363,7 @@ class Source(models.Model, StaleFieldsMixin):
             if self.deleted:
                 self.data = {}
                 self.version += 1
-                self.modified = datetime.datetime.utcnow()
+                self.modified = now()
                 super(Source, self).save(*args, **kwargs)
                 signals.source_deleted.send(self)
                 return
@@ -374,8 +374,8 @@ class Source(models.Model, StaleFieldsMixin):
 
         if created or 'data' in changed_values:
             self.version += 1
-            self.created = self.created or datetime.datetime.utcnow()
-            self.modified = datetime.datetime.utcnow()
+            self.created = self.created or now()
+            self.modified = now()
             super(Source, self).save(*args, **kwargs)
             if created:
                 signals.source_created.send(self)
