@@ -1,3 +1,4 @@
+from .graph import *
 from .identifiers import *
 from .index import *
 from .linked_data import *
