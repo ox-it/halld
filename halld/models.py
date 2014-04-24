@@ -76,7 +76,8 @@ class Resource(models.Model, StaleFieldsMixin):
 
     def regenerate(self):
         raw_data = {'@source': {},
-                    'href': self.get_absolute_url()}
+                    'href': self.get_absolute_url(),
+                    'identifier': {}}
         for source in self.source_set.all():
             raw_data['@source'][source.type_id] = copy.deepcopy(source.data)
         self.collect_identifiers(raw_data)
@@ -264,11 +265,12 @@ class Resource(models.Model, StaleFieldsMixin):
         for resource_type in get_resource_types().values():
             if resource_type.name != self.type_id:
                 identifiers.pop(resource_type.name, None)
-        identifiers['uri'] = self.get_absolute_uri(data)
+        data['identifier'].update(identifiers)
+        data['identifier']['uri'] = self.get_absolute_uri(data)
 
     def update_identifiers(self, data):
         if self.extant:
-            identifiers = data.get('identifier', {})
+            identifiers = data.get('identifier', {}).copy()
         else:
             identifiers = {}
         for current in Identifier.objects.filter(resource=self):

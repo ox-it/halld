@@ -60,7 +60,7 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
         return [None]
 
     def get_identifiers(self, resource, data):
-        return dict(data.get('identifier', {}))
+        return {}
 
     contributed_types = frozenset()
     def get_contributed_types(self, resource, data):
