@@ -4,7 +4,6 @@ import importlib
 import threading
 import ujson
 
-import jsonpointer
 import jsonschema
 
 from halld import exceptions
