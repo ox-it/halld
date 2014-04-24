@@ -6,6 +6,7 @@ import urllib.parse
 import wsgiref.handlers
 
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.utils.decorators import method_decorator
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, HttpResponseNotModified
@@ -157,7 +158,8 @@ class SourceListView(SourceView):
         response = HttpResponse(json.dumps(data, indent=2, sort_keys=True),
                                 content_type='application/hal+json')
         return response
-    
+
+    @transaction.atomic
     def put(self, request, resource_href, sources):
         data = self.get_request_json('application/hal+json')
         embedded = data.get('_embedded')
@@ -222,6 +224,7 @@ class SourceDetailView(VersioningMixin, SourceView):
         response['ETag'] = source.get_etag()
         return response
 
+    @transaction.atomic
     def put(self, request, source):
         if self.check_version(source) is False:
             raise HttpConflict
@@ -235,6 +238,7 @@ class SourceDetailView(VersioningMixin, SourceView):
         self.do_patch(request, source, patch)
         return self.get(request, source)
 
+    @transaction.atomic
     def patch(self, request, source):
         if self.check_version(source) is False:
             raise HttpConflict
@@ -242,10 +246,12 @@ class SourceDetailView(VersioningMixin, SourceView):
         self.do_patch(request, source, patch)
         return self.get(request, source)
 
+    @transaction.atomic
     def delete(self, request, source):
         self.do_delete(request, source)
         return HttpResponse(status=http.client.NO_CONTENT)
 
+    @transaction.atomic
     def move(self, request, source_data):
         raise NotImplementedError
         if not request.user.has_perm('halld.move_source', source_data):

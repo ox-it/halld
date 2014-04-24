@@ -3,6 +3,7 @@ import json
 
 from django.core.paginator import Paginator
 from django.core.urlresolvers import reverse
+from django.db import transaction
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from django_conneg.decorators import renderer
@@ -52,6 +53,7 @@ class ResourceListView(HALLDView):
         
         return self.render()
 
+    @transaction.atomic
     def post(self, request, resource_type):
         identifier = resource_type.generate_identifier()
         resource = Resource.objects.create(type_id=resource_type.name,
@@ -81,6 +83,7 @@ class ResourceDetailView(HALLDView):
         #    return HttpResponsePermanentRedirect(resource.moved_to.get_absolute_url())
         return self.render()
 
+    @transaction.atomic
     def post(self, request, resource_type, identifier, href):
         try:
             resource = Resource.objects.get(href=href)
