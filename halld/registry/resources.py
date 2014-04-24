@@ -110,8 +110,7 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
 
     def get_links(self, resource):
         from ..models import Link
-        from django.db.models import Q
-        return Link.objects.filter(Q(source=resource) | Q(target=resource))
+        return Link.objects.filter(active=resource)
 
     allow_uri_override = False
 

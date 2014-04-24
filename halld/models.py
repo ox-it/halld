@@ -29,6 +29,8 @@ else:
 
 logger = logging.getLogger(__name__)
 
+MAX_HREF_LENGTH = 2048
+
 def now():
     return pytz.utc.localize(datetime.datetime.utcnow())
 
@@ -46,10 +48,10 @@ class ResourceType(models.Model):
         return self.name
 
 class Resource(models.Model, StaleFieldsMixin):
-    href = models.CharField(max_length=2048, primary_key=True)
+    href = models.CharField(max_length=MAX_HREF_LENGTH, primary_key=True)
     type = models.ForeignKey(ResourceType)
     identifier = models.SlugField()
-    uri = models.CharField(max_length=1024, db_index=True, blank=True)
+    uri = models.CharField(max_length=MAX_HREF_LENGTH, db_index=True, blank=True)
 
     raw_data = JSONField(default={}, blank=True)
     data = JSONField(default={}, blank=True)
@@ -207,38 +209,52 @@ class Resource(models.Model, StaleFieldsMixin):
                 if isinstance(link, str):
                     link = {'href': link}
                 link['href'] = urljoin(self.href, link['href'])
-                link_data.add((link['href'],
-                               link_type.inverse_name if link_type.inverted else link_type.name,
-                               link_type.inverted,
-                               link_type.timeless or self.extant))
+                link_data.add((self.href,
+                               link['href'],
+                               link_type.name))
                 hrefs.add(link['href'])
+        link_data |= set((l[1], l[0], get_link_type(l[2]).inverse_name) for l in link_data)
 
         targets = {r.href: r for r in Resource.objects.filter(href__in=hrefs)}
+        targets[self.href] = self
 
-        links = list(Link.objects.filter(source=self).select_related('target'))
+        links = list(Link.objects.filter(source=self).select_related('active', 'passive'))
         for link in links:
-            lid = link.target_href, link.type_id, link.inverted, link.extant
+            lid = link.active_href, link.passive_href, link.type_id
             if lid in link_data:
+                extant = get_link_type(link.type_id).timeless or ((not link.active_id or link.active.extant)
+                                                              and (not link.passive_id or link.passive.extant))
+                if extant != link.extant:
+                    link.extant = extant
+                    link.save()
                 link_data.remove(lid)
             else:
                 link.delete()
-        for href, link_name, inverted, _ in link_data:
+        for active_href, passive_href, link_name in link_data:
             link_type = get_link_type(link_name)
-            target = targets.get(href)
-            if link_type.strict and not target:
-                raise exceptions.LinkTargetDoesNotExist(get_link_type(link_name), href)
+            active = targets.get(active_href)
+            passive = targets.get(passive_href)
+            target = active if passive_href == self.href else passive
+            if link_type.strict:
+                if not active:
+                    raise exceptions.LinkTargetDoesNotExist(get_link_type(link_name), active_href)
+                if not passive:
+                    raise exceptions.LinkTargetDoesNotExist(get_link_type(link_name), passive_href)
             links.append(Link.objects.create(source=self,
                                              target=target,
-                                             target_href=href,
+                                             active_href=active_href,
+                                             passive_href=passive_href,
+                                             active=active,
+                                             passive=passive,
                                              type_id=link_name,
-                                             active=target if inverted else self,
-                                             passive=self if inverted else target,
-                                             inverted=inverted,
-                                             extant=link_type.timeless or (self.extant and target.extant)))
-        return [l.target for l in links if l.target]
+                                             extant=link_type.timeless or (self.extant
+                                                                       and (target is None or target.extant))))
+
+        targets.pop(self.href)
+        return targets.values()
 
     def collect_identifiers(self, data):
-        identifiers = data['identifier'] = {}
+        identifiers = {}
         identifiers.update(self.get_type().get_identifiers(self, data))
         identifiers[self.type_id] = self.identifier
         for source in self.source_set.all():
@@ -393,12 +409,12 @@ class LinkType(models.Model):
 
 class Link(models.Model):
     source = models.ForeignKey(Resource, related_name='link_source')
-    target_href = models.CharField(max_length=2048)
-    target = models.ForeignKey(Resource, related_name='link_target', null=True, blank=True)
+    target = models.ForeignKey(Resource, related_name='target', null=True, blank=True)
+    active_href = models.CharField(max_length=MAX_HREF_LENGTH)
+    passive_href = models.CharField(max_length=MAX_HREF_LENGTH)
     active = models.ForeignKey(Resource, related_name='link_active', null=True, blank=True)
     passive = models.ForeignKey(Resource, related_name='link_passive', null=True, blank=True)
     type = models.ForeignKey(LinkType)
-    inverted = models.BooleanField()
     extant = models.BooleanField(default=True)
 
 class Identifier(models.Model, StaleFieldsMixin):

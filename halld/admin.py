@@ -11,7 +11,7 @@ class IdentifierAdmin(admin.ModelAdmin):
     list_filter = ['scheme']
 
 class LinkAdmin(admin.ModelAdmin):
-    list_display = ['active', 'type', 'passive', 'inverted']
+    list_display = ['active', 'type', 'passive']
     list_filter = ['type']
 
 class SourceAdmin(admin.ModelAdmin):

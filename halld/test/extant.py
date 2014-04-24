@@ -63,7 +63,10 @@ class ExtantTestCase(TestCase):
                       '@extant': False,
                       'eats': [anaconda.href]}
         r.save()
-        link = Link.objects.get(source=r)
+        self.assertFalse(r.extant)
+        link = Link.objects.get(source=r, type_id='eats')
+        self.assertEqual(link.extant, False)
+        link = Link.objects.get(source=r, type_id='eatenBy')
         self.assertEqual(link.extant, False)
 
     def testExtantLink(self):
@@ -74,6 +77,8 @@ class ExtantTestCase(TestCase):
                       '@extant': False,
                       'timelessF': [anaconda.href]}
         r.save()
-        link = Link.objects.get(source=r)
+        link = Link.objects.get(source=r, type_id='timelessF')
+        self.assertEqual(link.extant, True)
+        link = Link.objects.get(source=r, type_id='timelessR')
         self.assertEqual(link.extant, True)
 
