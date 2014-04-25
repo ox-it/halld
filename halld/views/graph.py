@@ -1,4 +1,5 @@
 import hashlib
+import json
 
 from django.http import HttpResponse
 from django_conneg.decorators import renderer
@@ -11,12 +12,13 @@ except ImportError:
 from .base import HALLDView
 from .. import exceptions
 from ..models import Resource
+from ..registry import get_link_type
 
 __all__ = ['GraphView']
 
 base_query = """
-WITH RECURSIVE search_graph(href, data, depth, href_path, link_type_path, extant, link_extant, cycle) AS (
-    SELECT r.href, r.data, 0,
+WITH RECURSIVE search_graph(href, type_id, data, depth, href_path, link_type_path, extant, link_extant, cycle) AS (
+    SELECT r.href, r.type_id, r.data, 0,
         ARRAY[r.href::text],
         ARRAY[]::text[],
         r.extant,
@@ -25,7 +27,7 @@ WITH RECURSIVE search_graph(href, data, depth, href_path, link_type_path, extant
     FROM halld_resource r
     WHERE {initial_where_clause}
   UNION ALL
-    SELECT r.href, r.data, sg.depth+1,
+    SELECT r.href, r.type_id, r.data, sg.depth+1,
         (href_path || ARRAY[r.href::text]),
         (link_type_path || ARRAY[l.type_id]::text[]),
         r.extant,
@@ -110,8 +112,45 @@ class GraphView(HALLDView):
 
         resources = Resource.objects.raw(query, params)
         
-        self.context.update({'resources': resources})
+        self.context.update({
+            'resources': resources,
+        })
         return self.render()
+
+    @renderer(format='hal', mimetypes=('application/hal+json',), name='HAL/JSON')
+    def render_hal(self, request, context, template_name):
+        links = {
+            'item': [],
+            'root': [],
+            'addLinkType': {'href': request.get_full_path() + '&link={linkType}',
+                            'templated': True},
+            'addRootResource': {'href': request.get_full_path() + '&root={href}',
+                                'templated': True},
+            'addStartTypeFilter': {'href': request.get_full_path() + '&startType={resourceType}',
+                                    'templated': True},
+            'addTypeFilter': {'href': request.get_full_path() + '&type={resourceType}',
+                              'templated': True},
+            'self': request.get_full_path(),
+        }
+        item_links = {}
+        hal = {
+            '_links': links,
+        }
+        for resource in context['resources']:
+            self_href = {'href': resource.href}
+            data = resource.filter_data(request.user, resource.data)
+            item = resource.get_hal(request.user, data, with_links=False)
+            item_links[resource.href] = item['_links'] = {
+                'self': self_href,
+            }
+            if resource.depth == 0:
+                links['root'].append({'href': resource.href})
+            else:
+                if resource.link_type_path[-1] not in item_links[resource.href_path[-2]]:
+                    item_links[resource.href_path[-2]][resource.link_type_path[-1]] = []
+                item_links[resource.href_path[-2]][resource.link_type_path[-1]].append(self_href)
+            links['item'].append(item)
+        return HttpResponse(json.dumps(hal, indent=2), content_type='application/hal+json')
 
     if pydot:
         @renderer(format='gv', mimetypes=('text/vnd.graphviz',), name='GraphViz')
