@@ -46,7 +46,7 @@ class GraphView(HALLDView):
     """
     
     def get(self, request):
-        roots = tuple(request.GET.getlist('root'))
+        roots = tuple(map(request.build_absolute_uri, request.GET.getlist('root')))
         links = tuple(request.GET.getlist('link'))
         types = tuple(request.GET.getlist('type'))
         start_types = tuple(request.GET.getlist('startType', types))
