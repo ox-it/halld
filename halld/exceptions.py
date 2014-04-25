@@ -219,3 +219,13 @@ class InvalidEncoding(HALLDException):
     name = 'invalid-encoding'
     description = "The request body you supplied couldn't be decoded using the expected character encoding."
     status_code = http.client.BAD_REQUEST
+
+class InvalidParameter(HALLDException):
+    name = 'invalid-parameter'
+    description = "You supplied an invalid value for a query parameter."
+    status_code = http.client.BAD_REQUEST
+
+class MissingParameter(HALLDException):
+    name = 'missing-parameter'
+    description = "A required query parameter was missing."
+    status_code = http.client.BAD_REQUEST
