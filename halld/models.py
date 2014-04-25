@@ -187,8 +187,8 @@ class Resource(models.Model, StaleFieldsMixin):
     def get_type(self):
         return get_resource_type(self.type_id)
 
-    def get_hal(self, user, data=None):
-        return self.get_type().get_hal(user, self, data or self.data)
+    def get_hal(self, user, data=None, with_links=True):
+        return self.get_type().get_hal(user, self, data or self.data, with_links=with_links)
 
     def get_jsonld(self, user, data):
         jsonld = self.get_hal(user, data)
