@@ -16,7 +16,8 @@ class IndexView(HALLDView):
                            'templated': True},
             'findSource': {'href': '/{resourceType}/{identifier}/source/{source}',
                            'templated': True},
-            'findByIdentifier': {'href': reverse('halld:by-identifier')}
+            'findByIdentifier': {'href': reverse('halld:by-identifier')},
+            'graph': {'href': reverse('halld:graph')},
         }
         self.context['_links'].update({
             'items:{}'.format(resource_type.name): {
