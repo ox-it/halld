@@ -143,6 +143,19 @@ class NoSuchSourceType(HALLDException):
         hal['sourceType'] = list(self.source_type)
         return hal
 
+class NoSuchLinkType(HALLDException):
+    name = 'no-such-link-type'
+    description = 'There is no such link type'
+    status_code = http.client.NOT_FOUND
+
+    def __init__(self, link_type):
+        self.link_type = link_type
+
+    def as_hal(self):
+        hal = super(NoSuchLinkType, self).as_hal()
+        hal['linkType'] = list(self.link_type)
+        return hal
+
 class NoSuchIdentifier(HALLDException):
     name = 'no-such-identifier'
     description = 'There is no such identifier'

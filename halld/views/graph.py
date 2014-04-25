@@ -59,6 +59,12 @@ class GraphView(HALLDView):
         if not links:
             raise exceptions.MissingParameter('link', 'You must supply one or more link names.')
 
+        for link in links:
+            try:
+                link_type = get_link_type(link)
+            except KeyError:
+                raise exceptions.NoSuchLinkType(link)
+
         initial_where_clause, initial_where_params = [], []
         iterative_where_clause, iterative_where_params = [], []
         
