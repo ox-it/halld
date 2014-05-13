@@ -29,6 +29,7 @@ class SourceTestCase(TestCase):
         source_href = resource_href + '/source/science'
         return response, source_href, identifier
 
+class SourceManipulationTestCase(SourceTestCase):
     def testGetUncreatedSource(self):
         request = self.factory.post('/snake')
         request.user = self.user
@@ -153,3 +154,21 @@ class SourceTestCase(TestCase):
             with self.assertRaises(exceptions.SourceValidationFailed):
                 self.source_view(request, 'snake', identifier, 'science')
             assert not source_created.called
+
+class AtomicTestCase(SourceTestCase):
+    def testDuplicatedIdentifier(self):
+        resource = models.Resource.objects.create(type_id='snake', identifier='python')
+        identifier = models.Identifier.objects.create(resource=resource, scheme='misc', value='bar')
+
+        _, source_href, identifier = self.create_resource()
+
+        request = self.factory.put('/snake/{}/source/science'.format(identifier),
+                                   data=json.dumps({'identifier': {'misc': 'bar'}}),
+                                   content_type='application/json')
+        request.user = self.user
+        with self.assertRaises(exceptions.DuplicatedIdentifier):
+            response = self.source_view(request, 'snake', identifier, 'science')
+
+        # Make sure the source wasn't saved.
+        self.assertEqual(models.Source.objects.filter(resource__identifier=identifier).count(),
+                         0)
