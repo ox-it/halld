@@ -117,13 +117,13 @@ class GraphView(HALLDView):
         
         self.context.update({
             'resources': resources,
+            'return_tree': return_tree,
         })
         return self.render()
 
     @renderer(format='hal', mimetypes=('application/hal+json',), name='HAL/JSON')
     def render_hal(self, request, context, template_name):
         links = {
-            'item': [],
             'root': [],
             'addLinkType': {'href': request.get_full_path() + '&link={linkType}',
                             'templated': True},
@@ -136,8 +136,10 @@ class GraphView(HALLDView):
             'self': request.get_full_path(),
         }
         item_links = {}
+        embedded_items = []
         hal = {
             '_links': links,
+            '_embedded': {'item': embedded_items},
         }
         for resource in context['resources']:
             self_href = {'href': resource.href}
@@ -152,7 +154,7 @@ class GraphView(HALLDView):
                 if resource.link_type_path[-1] not in item_links[resource.href_path[-2]]:
                     item_links[resource.href_path[-2]][resource.link_type_path[-1]] = []
                 item_links[resource.href_path[-2]][resource.link_type_path[-1]].append(self_href)
-            links['item'].append(item)
+            embedded_items.append(item)
         return HttpResponse(json.dumps(hal, indent=2), content_type='application/hal+json')
 
     if pydot:
