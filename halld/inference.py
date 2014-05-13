@@ -1,6 +1,9 @@
 import abc
+import logging
 
 import jsonpointer
+
+logger = logging.getLogger(__name__)
 
 class Inference(metaclass=abc.ABCMeta):
     inferred_keys = ()
@@ -25,11 +28,24 @@ class FromPointers(Inference):
         self.pointers = pointers
 
 class FirstOf(FromPointers):
+    def __init__(self, target, *pointers, update=False):
+        self.update = update
+        super(FirstOf, self).__init__(target, *pointers)
+
     def __call__(self, resource, data):
         for pointer in self.pointers:
             try:
                 result = jsonpointer.resolve_pointer(data, pointer)
-                jsonpointer.set_pointer(data, self.target, result)
+                if self.update:
+                    target = jsonpointer.resolve_pointer(data, self.target)
+                    if not isinstance(target, dict):
+                        logger.warning("FirstOf target %s is not a dict", self.target)
+                        return
+                    if not isinstance(result, dict):
+                        continue
+                    target.update(result)
+                else:
+                    jsonpointer.set_pointer(data, self.target, result)
                 return
             except jsonpointer.JsonPointerException:
                 pass
