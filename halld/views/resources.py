@@ -111,4 +111,4 @@ class ResourceDetailView(HALLDView):
             'href': reverse('halld:source-list', args=[resource.type_id, resource.identifier]),
         }
         return HttpResponse(json.dumps(hal, indent=2, sort_keys=True),
-                            mimetype='application/hal+json')
+                            content_type='application/hal+json')
