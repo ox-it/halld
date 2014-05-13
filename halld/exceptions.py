@@ -229,3 +229,8 @@ class MissingParameter(HALLDException):
     name = 'missing-parameter'
     description = "A required query parameter was missing."
     status_code = http.client.BAD_REQUEST
+
+class CantReturnTree(HALLDException):
+    name = 'cant-return-tree'
+    description = "You requested a tree representation, but you specified more than one link, or that link is not inverse-functional"
+    status_code = http.client.BAD_REQUEST

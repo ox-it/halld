@@ -53,6 +53,7 @@ class GraphView(HALLDView):
         types = tuple(request.GET.getlist('type'))
         start_types = tuple(request.GET.getlist('startType', types))
         include_unlinked = 'includeUnlinked' in request.GET
+        return_tree = 'tree' in request.GET
 
         limit = self.get_integer_param(request, 'limit')
         offset = self.get_integer_param(request, 'offset')
@@ -66,6 +67,8 @@ class GraphView(HALLDView):
                 link_type = get_link_type(link)
             except KeyError:
                 raise exceptions.NoSuchLinkType(link)
+        if return_tree and (len(links) > 1 or not link_type.inverse_functional):
+            raise exceptions.CantReturnTree()
 
         initial_where_clause, initial_where_params = [], []
         iterative_where_clause, iterative_where_params = [], []
