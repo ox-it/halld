@@ -47,12 +47,12 @@ class SourceManipulationTestCase(SourceTestCase):
 
     @mock.patch('halld.signals.source_created')
     def testCreateSingleSource(self, source_created):
-        label = 'Python'
+        title = 'Python'
         
         _, source_href, identifier = self.create_resource()
         
         request = self.factory.put('/snake/{}/source/science'.format(identifier),
-                                   data=json.dumps({'label': label}),
+                                   data=json.dumps({'title': title}),
                                    content_type='application/json')
         request.user = self.user
         self.source_view(request, 'snake', identifier, 'science')
@@ -66,7 +66,7 @@ class SourceManipulationTestCase(SourceTestCase):
         
         self.assertEqual(response['Content-type'], 'application/hal+json')
         source_data = json.loads(response.content.decode())
-        self.assertEqual(source_data['label'], label)
+        self.assertEqual(source_data['title'], title)
         self.assertEqual(source_data['_meta']['sourceType'], 'science')
         self.assertEqual(source_data['_meta']['version'], 1) # only just created
 

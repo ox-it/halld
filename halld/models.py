@@ -322,8 +322,8 @@ class Resource(models.Model, StaleFieldsMixin):
         return self.get_type().filter_data(user, self, data)
 
     def __str__(self):
-        if 'label' in self.data:
-            return '{} ("{}")'.format(self.href, self.data['label'])
+        if 'title' in self.data:
+            return '{} ("{}")'.format(self.href, self.data['title'])
         else:
             return self.href
 

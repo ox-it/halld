@@ -167,7 +167,7 @@ class GraphView(HALLDView):
             for resource in context['resources']:
                 if resource.href not in seen:
                     node = pydot.Node(sha1(resource.href))
-                    node.set_label(resource.data.get('label', ''))
+                    node.set_label(resource.data.get('title', ''))
                     if not resource.extant:
                         node.set_color('gray')
                         node.set_fontcolor('gray')
