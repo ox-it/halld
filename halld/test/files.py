@@ -30,8 +30,20 @@ class FileCreationViewTestCase(FileTestCase):
         request = self.factory.post("/document", {"file": self.test_file})
         request.user = self.user
         response = self.file_creation_view(request, "document")
-        
+
         self.assertEqual(response.status_code, http.client.CREATED)
+        location = response['Location']
+        assert location.startswith("http://testserver/document/")
+
+        try:
+            resource = Resource.objects.get(type_id='document')
+        except Resource.DoesNotExist:
+            assert False, "Resource for file not created."
+
+        try:
+            resource_file = ResourceFile.objects.get(resource=resource)
+        except ResourceFile.DoesNotExist:
+            assert False, "ResourceFile not created."
 
 class FileViewTestCase(FileTestCase):
     pass
