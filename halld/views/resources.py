@@ -57,7 +57,8 @@ class ResourceListView(HALLDView):
     def post(self, request, resource_type):
         identifier = resource_type.generate_identifier()
         resource = Resource.objects.create(type_id=resource_type.name,
-                                           identifier=identifier)
+                                           identifier=identifier,
+                                           creator=request.user)
         return HttpResponseCreated(resource.get_absolute_url())
 
 class ResourceDetailView(HALLDView):
@@ -85,11 +86,15 @@ class ResourceDetailView(HALLDView):
 
     @transaction.atomic
     def post(self, request, resource_type, identifier, href):
+        if not resource_type.user_can_create(request.user):
+            raise PermissionDenied
         try:
             resource = Resource.objects.get(href=href)
         except Resource.DoesNotExist:
             if resource_type.user_can_assign_identifier(request.user, identifier):
-                resource = Resource.objects.create(type_id=resource_type.name, identifier=identifier)
+                resource = Resource.objects.create(type_id=resource_type.name,
+                                                   identifier=identifier,
+                                                   creator=request.user)
                 return HttpResponseCreated(resource.get_absolute_url())
             else:
                 raise exceptions.CannotAssignIdentifier

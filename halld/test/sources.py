@@ -20,6 +20,9 @@ class SourceTestCase(TestCase):
         self.resource_detail_view = views.ResourceDetailView.as_view()
         self.resource_list_view = views.ResourceListView.as_view()
 
+    def tearDown(self):
+        User.objects.all().delete()
+
     def create_resource(self, source_type='science'):
         request = self.factory.post('/snake')
         request.user = self.user
@@ -157,7 +160,7 @@ class SourceManipulationTestCase(SourceTestCase):
 
 class AtomicTestCase(SourceTestCase):
     def testDuplicatedIdentifier(self):
-        resource = models.Resource.objects.create(type_id='snake', identifier='python')
+        resource = models.Resource.objects.create(type_id='snake', identifier='python', creator=self.user)
         identifier = models.Identifier.objects.create(resource=resource, scheme='misc', value='bar')
 
         _, source_href, identifier = self.create_resource()

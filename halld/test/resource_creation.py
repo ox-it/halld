@@ -18,6 +18,9 @@ class ResourceHALTestCase(TestCase):
         self.resource_detail_view = views.ResourceDetailView.as_view()
         self.source_view = views.SourceDetailView.as_view()
 
+    def tearDown(self):
+        User.objects.all().delete()
+
     def testGetSourceWithMissingResource(self):
         request = self.factory.get('/snake/python/source/science')
         request.user = self.user

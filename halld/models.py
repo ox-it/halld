@@ -60,6 +60,7 @@ class Resource(models.Model, StaleFieldsMixin):
 
     deleted = models.BooleanField(default=False)
 
+    creator = models.ForeignKey(User)
     created = models.DateTimeField(null=True, blank=True)
     modified = models.DateTimeField(null=True, blank=True)
 
