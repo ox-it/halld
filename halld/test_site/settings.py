@@ -8,11 +8,13 @@ INSTALLED_APPS = [
     'django.contrib.sites',
     'django.contrib.contenttypes',
     'halld',
+    'halld.files',
     'halld.test_site',
     'django_conneg',
 ]
 
 RESOURCE_TYPES = [
+    'halld.test_site.registry.DocumentResourceTypeDefinition',
     'halld.test_site.registry.SnakeResourceTypeDefinition',
     'halld.test_site.registry.PenguinResourceTypeDefinition',
 ]

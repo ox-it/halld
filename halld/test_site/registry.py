@@ -1,3 +1,4 @@
+from halld.files.registry import FileResourceTypeDefinition
 from halld.inference import FirstOf
 from halld.registry import ResourceTypeDefinition
 
@@ -14,3 +15,6 @@ class PenguinResourceTypeDefinition(ResourceTypeDefinition):
 
     def user_can_assign_identifier(self, user, identifier):
         return user.is_superuser
+
+class DocumentResourceTypeDefinition(FileResourceTypeDefinition):
+    name = 'document'
