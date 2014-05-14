@@ -47,6 +47,11 @@ class ResourceType(models.Model):
     def __str__(self):
         return self.name
 
+    class Meta:
+        permissions = (
+            ('instantiate_resourcetype', 'Can create a Resource of this ResourceType'),
+        )
+
 class Resource(models.Model, StaleFieldsMixin):
     href = models.CharField(max_length=MAX_HREF_LENGTH, primary_key=True)
     type = models.ForeignKey(ResourceType)

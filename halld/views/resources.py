@@ -1,6 +1,7 @@
 import http.client
 import json
 
+from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.core.urlresolvers import reverse
 from django.db import transaction
@@ -55,6 +56,8 @@ class ResourceListView(HALLDView):
 
     @transaction.atomic
     def post(self, request, resource_type):
+        if not resource_type.user_can_create(request.user):
+            raise PermissionDenied
         identifier = resource_type.generate_identifier()
         resource = Resource.objects.create(type_id=resource_type.name,
                                            identifier=identifier,

@@ -120,6 +120,11 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
     def user_can_assign_identifier(self, user, identifier):
         return False
 
+    def user_can_create(self, user):
+        from ..models import ResourceType
+        return user.has_perm('halld.instantiate_resourcetype',
+                             ResourceType.objects.get(name=self.name))
+
     def filter_data(self, user, source, data):
         return data
 
