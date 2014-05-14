@@ -200,6 +200,11 @@ class MissingContentType(HALLDException):
     description = 'You must supply a Content-Type header.'
     status_code = http.client.BAD_REQUEST
 
+class MissingContentLength(HALLDException):
+    name = 'missing-content-length'
+    description = 'You must supply a Content-Length header.'
+    status_code = http.client.BAD_REQUEST
+
 class UnsupportedContentType(HALLDException):
     name = 'unsupported-content-type'
     description = 'You supplied an unsupported Content-Type with your request.'

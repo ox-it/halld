@@ -14,3 +14,4 @@ def upload_to(instance, filename):
 class ResourceFile(models.Model):
     resource = models.ForeignKey(Resource)
     file = models.FileField(upload_to=upload_to)
+    content_type = models.CharField(max_length=80)

@@ -17,9 +17,29 @@ from .models import ResourceFile
 from ..views.resources import ResourceListView
 
 class FileView(View):
-    def process_file(self, request, resource):
-        if request.META['CONTENT_TYPE'] == 'multipart/form-data':
-            form = UploadFileForm(request.POST, request.FILES)
+    def process_file(self, request, resource_file):
+        try:
+            content_type = request.META['CONTENT_TYPE'].split(';')[0].strip()
+        except KeyError:
+            raise halld.exceptions.MissingContentType
+        if content_type == 'multipart/form-data':
+            form = UploadFileForm(request.POST, request.FILES, instance=resource_file)
+            if form.is_valid():
+                form.save()
+            else:
+                raise exceptions.InvalidMultiPartFileCreation(form.errors)
+        elif content_type == 'application/x-www-form-urlencoded':
+            raise exceptions.NoFileUploaded
+        else:
+            self.process_file_from_request_body(request, resource_file, content_type)
+
+    def process_file_from_request_body(self, request, resource_file, content_type):
+        upload_handlers = request.upload_handlers
+        content_length = int(request.META.get('CONTENT_LENGTH', 0))
+        if content_length == 0:
+            raise halld.exceptions.MissingContentLength
+        for handler in upload_handlers:
+            pass
 
 class FileCreationView(ResourceListView, FileView):
     @method_decorator(login_required)
@@ -29,13 +49,13 @@ class FileCreationView(ResourceListView, FileView):
             return super(FileCreationView, self).post(request, resource_type)
 
         if not resource_type.user_can_create(request.user):
-            d
             raise PermissionDenied
         identifier = resource_type.generate_identifier()
         resource = Resource.objects.create(type_id=resource_type.name,
                                            identifier=identifier,
                                            creator=request.user)
-        self.process_file(request, resource)
+        resource_file = ResourceFile(resource=resource)
+        self.process_file(request, resource_file)
         return HttpResponseCreated(resource.get_absolute_url())
 
 class FileDetailView(FileView):
