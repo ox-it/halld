@@ -33,7 +33,6 @@ class FileCreationViewTestCase(FileTestCase):
         response = self.file_creation_view(request, "document")
         self.check_creation_response(response)
 
-    @unittest.expectedFailure
     def testPostPlainFile(self):
         request = self.factory.post("/document",
                                     self.test_file.getvalue(),

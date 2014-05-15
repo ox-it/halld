@@ -1,6 +1,7 @@
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
+from django.core.files.uploadhandler import TemporaryFileUploadHandler
 from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
 from django.views.generic import View
@@ -34,12 +35,20 @@ class FileView(View):
             self.process_file_from_request_body(request, resource_file, content_type)
 
     def process_file_from_request_body(self, request, resource_file, content_type):
-        upload_handlers = request.upload_handlers
+        handlers = request.upload_handlers
         content_length = int(request.META.get('CONTENT_LENGTH', 0))
         if content_length == 0:
             raise halld.exceptions.MissingContentLength
-        for handler in upload_handlers:
-            pass
+
+        handler = TemporaryFileUploadHandler()
+        handler.new_file("file", "upload", content_type, content_length)
+        counter = 0
+        for chunk in request:
+            handler.receive_data_chunk(chunk, counter)
+            counter += len(chunk)
+        resource_file.file = handler.file_complete(content_length)
+        resource_file.content_type = content_type
+        resource_file.save()
 
 class FileCreationView(ResourceListView, FileView):
     @method_decorator(login_required)
