@@ -1,8 +1,11 @@
+import os
+
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from django.core.files.uploadhandler import TemporaryFileUploadHandler
 from django.core.urlresolvers import reverse
 from django.db import transaction
-from django.core.files.uploadhandler import TemporaryFileUploadHandler
+from django.http import HttpResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
 from django.views.generic import View
@@ -13,6 +16,7 @@ import halld.exceptions
 from ..registry.resources import get_resource_type
 
 from .registry import FileResourceTypeDefinition
+from . import conf
 from . import exceptions
 from .forms import UploadFileForm
 from .models import ResourceFile
@@ -90,11 +94,22 @@ class FileDetailView(FileView):
             raise halld.exceptions.NoSuchResourceType(resource_type)
         if not isinstance(resource_type, FileResourceTypeDefinition):
             raise exceptions.NotAFileResourceType(resource_type)
-        return super(FileView, self).dispatch(request, resource_type, identifier, **kwargs)
+        href = request.build_absolute_uri(reverse('halld:resource-detail',
+                                                  args=[resource_type.name, identifier]))
+        resource = get_object_or_404(Resource, href=href)
+        resource_file = ResourceFile.objects.get(resource=resource)
+        return super(FileView, self).dispatch(request, resource_file, **kwargs)
 
-    def get(self, request, resource_type, identifier):
-        resource_file = get_object_or_404(Resource, type_id=resource_type.name, identifier=identifier)
-
+    def get(self, request, resource_file):
+        if conf.USE_XSENDFILE:
+            response = HttpResponse(content_type=resource_file.content_type)
+            response['X-Send-File'] = resource_file.file.path
+        else:
+            f = open(resource_file.file.path, 'r')
+            response = StreamingHttpResponse(f,
+                                             content_type=resource_file.content_type)
+            response['Content-Length'] = os.fstat(f.fileno()).st_size
+        return response
     
     @method_decorator(login_required)
     def post(self, request, resource_type, identifier):

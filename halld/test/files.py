@@ -6,6 +6,7 @@ import unittest
 from django.core.urlresolvers import reverse
 from django.contrib.auth.models import User
 from django.test import TestCase, RequestFactory
+import mock
 
 from ..models import Resource, Source
 from ..files.models import ResourceFile
@@ -96,3 +97,18 @@ class FileViewTestCase(FileTestCase):
         request = self.factory.get(path + '/file')
         request.user = self.user
         response = self.file_detail_view(request, 'document', identifier)
+        self.assertEqual(response.status_code, http.client.OK)
+        self.assertEqual(response['Content-Type'], 'text/plain')
+        self.assertEqual(b''.join(response.streaming_content), self.test_file.getvalue())
+
+    @mock.patch('halld.files.conf.USE_XSENDFILE', True)
+    def testGetXSendFile(self):
+        # X-Send-File is a header to tell the web server to send a file served
+        # off disk.
+        path, identifier = self.create_file_resource()
+        request = self.factory.get(path + '/file')
+        request.user = self.user
+        response = self.file_detail_view(request, 'document', identifier)
+        self.assertEqual(response.status_code, http.client.OK)
+        self.assertEqual(response['Content-Type'], 'text/plain')
+        self.assertEqual(response['X-Send-File'], ResourceFile.objects.get().file.path)
