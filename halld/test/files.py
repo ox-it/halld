@@ -19,7 +19,7 @@ class FileTestCase(TestCase):
                                                   password='secret')
         self.file_creation_view = views.FileCreationView.as_view()
         self.file_resource_detail_view = views.FileResourceDetailView.as_view()
-        self.file_view = views.FileView.as_view()
+        self.file_detail_view = views.FileDetailView.as_view()
         self.test_file = io.BytesIO(b"hello")
         self.test_file.name = 'hello.txt'
 
@@ -87,3 +87,12 @@ class FileResourceDetailViewTestCase(FileTestCase):
                          request.build_absolute_uri(reverse('halld-files:file-detail',
                                                             args=['document', identifier])))
         self.assertEqual(file_link.get('type'), 'text/plain')
+
+class FileViewTestCase(FileTestCase):
+
+    def testGet(self):
+        path, identifier = self.create_file_resource()
+
+        request = self.factory.get(path + '/file')
+        request.user = self.user
+        response = self.file_detail_view(request, 'document', identifier)
