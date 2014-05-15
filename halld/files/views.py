@@ -15,7 +15,7 @@ from .registry import FileResourceTypeDefinition
 from . import exceptions
 from .forms import UploadFileForm
 from .models import ResourceFile
-from ..views.resources import ResourceListView
+from ..views.resources import ResourceListView, ResourceDetailView
 
 class FileView(View):
     def process_file(self, request, resource_file):
@@ -66,6 +66,9 @@ class FileCreationView(ResourceListView, FileView):
         resource_file = ResourceFile(resource=resource)
         self.process_file(request, resource_file)
         return HttpResponseCreated(resource.get_absolute_url())
+
+class FileResourceDetailView(ResourceDetailView):
+    pass
 
 class FileDetailView(FileView):
     def dispatch(self, request, resource_type, identifier, **kwargs):
