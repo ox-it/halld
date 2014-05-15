@@ -29,6 +29,14 @@ class FileTestCase(TestCase):
         ResourceFile.objects.all().delete()
         Resource.objects.all().delete()
 
+    def create_file_resource(self):
+        request = self.factory.post("/document", {"file": self.test_file})
+        request.user = self.user
+        response = self.file_creation_view(request, "document")
+        path = response['Location'][17:]
+        identifier = path.split('/')[-1]
+        return path, identifier
+
 class FileCreationViewTestCase(FileTestCase):
     def testPostMultiPart(self):
         request = self.factory.post("/document", {"file": self.test_file})
@@ -64,13 +72,9 @@ class FileCreationViewTestCase(FileTestCase):
         # And make sure the right thing ended up in our file.
         self.assertEqual(resource_file.file.read(), self.test_file.getvalue())
 
-class FileViewTestCase(FileTestCase):
-    def testPostMultiPart(self):
-        request = self.factory.post("/document", {"file": self.test_file})
-        request.user = self.user
-        response = self.file_creation_view(request, "document")
-        path = response['Location'][17:]
-        identifier = path.split('/')[-1]
+class FileResourceDetailViewTestCase(FileTestCase):
+    def testGet(self):
+        path, identifier = self.create_file_resource()
 
         request = self.factory.get(path) # Trim scheme and host
         request.user = self.user
