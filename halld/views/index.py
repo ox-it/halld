@@ -7,7 +7,11 @@ __all__ = ['IndexView']
 
 class IndexView(HALLDView):
     def get(self, request):
-        self.context['_links'] = {
+        return self.render()
+
+    def hal_json_from_context(self, request, context):
+        hal = {'_links': {}}
+        hal['_links'].update({
             'findResourceType': {'href': '/type/{resourceType}',
                            'templated': True},
             'findResourceList': {'href': '/{resourceType}',
@@ -18,15 +22,15 @@ class IndexView(HALLDView):
                            'templated': True},
             'findByIdentifier': {'href': reverse('halld:by-identifier')},
             'graph': {'href': reverse('halld:graph')},
-        }
-        self.context['_links'].update({
+        })
+        hal['_links'].update({
             'items:{}'.format(resource_type.name): {
                 'href': reverse('halld:resource-list', args=[resource_type.name])}
             for resource_type in get_resource_types().values()
         })
-        self.context['_links'].update({
+        hal['_links'].update({
             'type:{}'.format(resource_type.name): {
                 'href': reverse('halld:resource-type-detail', args=[resource_type.name])}
             for resource_type in get_resource_types().values()
         })
-        return self.render()
+        return hal
