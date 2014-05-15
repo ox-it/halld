@@ -24,6 +24,9 @@ class FileTestCase(TestCase):
         self.test_file = io.BytesIO(b"hello")
         self.test_file.name = 'hello.txt'
 
+        self.another_file = io.BytesIO(b"goodbye")
+        self.another_file.name = 'goodbye.rst'
+
     def tearDown(self):
         User.objects.all().delete()
         Source.objects.all().delete()
@@ -93,7 +96,6 @@ class FileViewTestCase(FileTestCase):
 
     def testGet(self):
         path, identifier = self.create_file_resource()
-
         request = self.factory.get(path + '/file')
         request.user = self.user
         response = self.file_detail_view(request, 'document', identifier)
@@ -112,3 +114,35 @@ class FileViewTestCase(FileTestCase):
         self.assertEqual(response.status_code, http.client.OK)
         self.assertEqual(response['Content-Type'], 'text/plain')
         self.assertEqual(response['X-Send-File'], ResourceFile.objects.get().file.path)
+
+    def testPost(self):
+        path, identifier = self.create_file_resource()
+        request = self.factory.post(path + '/file',
+                                    {'content_type': 'text/x-rst',
+                                     'file': self.another_file})
+        request.user = self.user
+        response = self.file_detail_view(request, 'document', identifier)
+        self.assertEqual(response.status_code, http.client.NO_CONTENT)
+        resource_file = ResourceFile.objects.get()
+        self.assertEqual(resource_file.content_type, 'text/x-rst')
+        self.assertEqual(resource_file.file.read(), self.another_file.getvalue())
+
+    def testPut(self):
+        path, identifier = self.create_file_resource()
+        request = self.factory.put(path + '/file',
+                                   self.another_file.read(),
+                                   content_type='text/x-rst')
+        request.user = self.user
+        response = self.file_detail_view(request, 'document', identifier)
+        self.assertEqual(response.status_code, http.client.NO_CONTENT)
+        resource_file = ResourceFile.objects.get()
+        self.assertEqual(resource_file.content_type, 'text/x-rst')
+        self.assertEqual(resource_file.file.read(), self.another_file.getvalue())
+
+    def testDelete(self):
+        # It shouldn't be possible to delete a file like this
+        path, identifier = self.create_file_resource()
+        request = self.factory.delete(path + '/file')
+        request.user = self.user
+        response = self.file_detail_view(request, 'document', identifier)
+        self.assertEqual(response.status_code, http.client.METHOD_NOT_ALLOWED)

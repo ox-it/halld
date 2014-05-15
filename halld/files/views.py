@@ -1,3 +1,4 @@
+import http.client
 import os
 
 from django.contrib.auth.decorators import login_required
@@ -112,13 +113,11 @@ class FileDetailView(FileView):
         return response
     
     @method_decorator(login_required)
-    def post(self, request, resource_type, identifier):
-        pass
+    def post(self, request, resource_file):
+        self.process_file(request, resource_file)
+        return HttpResponse('', status=http.client.NO_CONTENT)
 
     @method_decorator(login_required)
-    def put(self, request, resource_type, identifier):
-        pass
-
-    @method_decorator(login_required)
-    def delete(self, request, resource_type, identifier):
-        pass
+    def put(self, request, resource_file):
+        self.process_file(request, resource_file)
+        return HttpResponse('', status=http.client.NO_CONTENT)
