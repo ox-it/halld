@@ -62,4 +62,10 @@ class FileCreationViewTestCase(FileTestCase):
         self.assertEqual(resource_file.file.read(), self.test_file.getvalue())
 
 class FileViewTestCase(FileTestCase):
-    pass
+    def testPostMultiPart(self):
+        request = self.factory.post("/document", {"file": self.test_file})
+        request.user = self.user
+        response = self.file_creation_view(request, "document")
+
+        request = self.factory.get(response['Location'][17:]) # Trim scheme and host
+        # TODO: more assertions
