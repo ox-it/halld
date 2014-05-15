@@ -5,3 +5,4 @@ from .inference import *
 from .resource import *
 from .resource_creation import *
 from .sources import *
+from .types import *

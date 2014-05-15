@@ -31,9 +31,18 @@ class ResourceListView(HALLDView):
             page_num = int(request.GET.get('page'))
         except:
             page_num = 1
-        page = paginator.page(page_num)
-        self.context.update(resource_type.get_type_properties())
-        self.context.update({
+        self.context['resource_type'] = resource_type
+        self.context['paginator'] = paginator
+        self.context['page'] = paginator.page(page_num)
+        return self.render()
+
+    def hal_json_from_context(self, request, context):
+        paginator, page = context['paginator'], context['page']
+        resource_type = context['resource_type']
+
+        hal = {}
+        hal.update(resource_type.get_type_properties())
+        hal.update({
             '@id': '',
             '_links': {
                 'first': {'href': '?page=1'},
@@ -47,12 +56,11 @@ class ResourceListView(HALLDView):
             },
             '_embedded': {'item' :[resource.get_hal(request.user) for resource in page.object_list]},
         })
-        if page_num > 1:
-            self.context['_links']['previous'] = {'href': '?page={0}'.format(page_num - 1)}
-        if page_num < paginator.num_pages:
-            self.context['_links']['next'] = {'href': '?page={0}'.format(page_num + 1)}
-        
-        return self.render()
+        if page.number > 1:
+            hal['_links']['previous'] = {'href': '?page={0}'.format(page.number - 1)}
+        if page.number < paginator.num_pages:
+            hal['_links']['next'] = {'href': '?page={0}'.format(page.number + 1)}
+        return hal
 
     @transaction.atomic
     def post(self, request, resource_type):
@@ -104,8 +112,7 @@ class ResourceDetailView(HALLDView):
         else:
             raise exceptions.ResourceAlreadyExists(resource)
 
-    @renderer(format='hal', mimetypes=('application/hal+json',), name='HAL/JSON')
-    def render_hal(self, request, context, template_name):
+    def hal_json_from_context(self, request, context):
         resource = context['resource']
         data = resource.filter_data(request.user, resource.data)
         hal = resource.get_hal(request.user, data)
@@ -118,5 +125,4 @@ class ResourceDetailView(HALLDView):
         hal['_links']['source'] = {
             'href': reverse('halld:source-list', args=[resource.type_id, resource.identifier]),
         }
-        return HttpResponse(json.dumps(hal, indent=2, sort_keys=True),
-                            content_type='application/hal+json')
+        return hal
