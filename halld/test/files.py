@@ -1,7 +1,9 @@
 import http.client
 import io
+import json
 import unittest
 
+from django.core.urlresolvers import reverse
 from django.contrib.auth.models import User
 from django.test import TestCase, RequestFactory
 
@@ -16,6 +18,7 @@ class FileTestCase(TestCase):
                                                   email='superuser@example.com',
                                                   password='secret')
         self.file_creation_view = views.FileCreationView.as_view()
+        self.file_resource_detail_view = views.FileResourceDetailView.as_view()
         self.file_view = views.FileView.as_view()
         self.test_file = io.BytesIO(b"hello")
         self.test_file.name = 'hello.txt'
@@ -62,10 +65,20 @@ class FileCreationViewTestCase(FileTestCase):
         self.assertEqual(resource_file.file.read(), self.test_file.getvalue())
 
 class FileViewTestCase(FileTestCase):
+    @unittest.expectedFailure
     def testPostMultiPart(self):
         request = self.factory.post("/document", {"file": self.test_file})
         request.user = self.user
         response = self.file_creation_view(request, "document")
+        path = response['Location'][17:]
+        identifier = path.split('/')[-1]
 
-        request = self.factory.get(response['Location'][17:]) # Trim scheme and host
-        # TODO: more assertions
+        request = self.factory.get(path) # Trim scheme and host
+        request.user = self.user
+        response = self.file_resource_detail_view(request, 'document', identifier)
+
+        data = json.loads(response.content.decode())
+        file_link = data['_links'].get('describes')
+        self.assertIsInstance(file_link, dict)
+        self.assertEqual(file_link['href'],
+                         request.build_absolute_uri(reverse('halld-file:file-detail', 'document', 'identifier')))
