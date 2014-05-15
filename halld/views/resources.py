@@ -86,6 +86,7 @@ class ResourceDetailView(HALLDView):
     def get(self, request, resource_type, identifier, href):
         resource = get_object_or_404(Resource, href=href)
         self.context['resource'] = resource
+        self.context['resource_type'] = resource_type
         if resource.deleted:
             raise Http404
         elif not resource.extant:

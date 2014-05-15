@@ -1,5 +1,6 @@
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from django.core.urlresolvers import reverse
 from django.db import transaction
 from django.core.files.uploadhandler import TemporaryFileUploadHandler
 from django.shortcuts import get_object_or_404
@@ -68,7 +69,18 @@ class FileCreationView(ResourceListView, FileView):
         return HttpResponseCreated(resource.get_absolute_url())
 
 class FileResourceDetailView(ResourceDetailView):
-    pass
+    def hal_json_from_context(self, request, context):
+        hal = super(FileResourceDetailView, self).hal_json_from_context(request, context)
+        resource_type, resource = context['resource_type'], context['resource']
+        if isinstance(resource_type, FileResourceTypeDefinition):
+            # Add the link to the file
+            hal['_links']['describes'] = {
+                'href': reverse('halld-files:file-detail',
+                                args=[resource.type_id,
+                                      resource.identifier]),
+                'type': ResourceFile.objects.get(resource=resource).content_type,
+            }
+        return hal
 
 class FileDetailView(FileView):
     def dispatch(self, request, resource_type, identifier, **kwargs):
@@ -82,7 +94,7 @@ class FileDetailView(FileView):
 
     def get(self, request, resource_type, identifier):
         resource_file = get_object_or_404(Resource, type_id=resource_type.name, identifier=identifier)
-        
+
     
     @method_decorator(login_required)
     def post(self, request, resource_type, identifier):

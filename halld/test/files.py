@@ -65,7 +65,6 @@ class FileCreationViewTestCase(FileTestCase):
         self.assertEqual(resource_file.file.read(), self.test_file.getvalue())
 
 class FileViewTestCase(FileTestCase):
-    @unittest.expectedFailure
     def testPostMultiPart(self):
         request = self.factory.post("/document", {"file": self.test_file})
         request.user = self.user
@@ -80,5 +79,7 @@ class FileViewTestCase(FileTestCase):
         data = json.loads(response.content.decode())
         file_link = data['_links'].get('describes')
         self.assertIsInstance(file_link, dict)
-        self.assertEqual(file_link['href'],
-                         request.build_absolute_uri(reverse('halld-file:file-detail', 'document', 'identifier')))
+        self.assertEqual(request.build_absolute_uri(file_link.get('href')),
+                         request.build_absolute_uri(reverse('halld-files:file-detail',
+                                                            args=['document', identifier])))
+        self.assertEqual(file_link.get('type'), 'text/plain')
