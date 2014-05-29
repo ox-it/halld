@@ -26,10 +26,12 @@ class Update(object, metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def __call__(self, source):
+    def __call__(self, author, committer, source):
         pass
 
 class PutUpdate(Update):
+    require_source_exists = False
+
     def __init__(self, data):
         self.data = data
 
@@ -40,20 +42,25 @@ class PutUpdate(Update):
         return cls(data['data'])
 
     def __call__(self, author, committer, source):
-        was_deleted = source.deleted
-        source.deleted = False
-        data = source.filter_data(author, source.data)
-        patch = jsonpatch.make_patch(data, self.data)
-        update = PatchUpdate(patch)
-        try:
-            result = update(author, committer)
-        except Exception:
-            source.deleted = was_deleted
-            raise
-        if was_deleted:
-            return UpdateResult.created
+        if self.data is None:
+            delete_update = DeleteUpdate()
+            return delete_update(author, committer, source)
         else:
-            return result
+            creating = not source.pk
+            was_deleted = source.deleted
+            source.deleted = False
+            data = source.filter_data(author, source.data)
+            patch = jsonpatch.make_patch(data, self.data)
+            patch_update = PatchUpdate(patch)
+            try:
+                result = patch_update(author, committer, source)
+            except Exception:
+                source.deleted = was_deleted
+                raise
+            if was_deleted or creating:
+                return UpdateResult.created
+            else:
+                return result
 
 class PatchUpdate(Update):
     def __init__(self, patch):
@@ -78,8 +85,8 @@ class PatchUpdate(Update):
         # whether it's applied before or after filtering. This ensures the
         # committer isn't trying to change something that would ordinarily
         # be filtered.
-        filtered_patched = source.filter_data(self.committer, jsonpatch.apply_patch(source.data, self.patch))
-        patched_filtered = jsonpatch.apply_patch(source.filter_data(self.committer, source.data), self.patch)
+        filtered_patched = source.filter_data(committer, jsonpatch.apply_patch(source.data, self.patch))
+        patched_filtered = jsonpatch.apply_patch(source.filter_data(committer, source.data), self.patch)
         if filtered_patched != patched_filtered:
             raise exceptions.PatchUnacceptable
 
@@ -95,7 +102,7 @@ class DeleteUpdate(Update):
         return cls()
 
     def __call__(self, author, committer, source):
-        if not self.has_perm('halld.delete_source', source):
+        if not committer.has_perm('halld.delete_source', source):
             raise PermissionDenied
         if not source.deleted:
             source.deleted = True
@@ -103,13 +110,12 @@ class DeleteUpdate(Update):
             return UpdateResult.deleted
 
 class MoveUpdate(Update):
-    def __init__(self, author, committer, target_resource_href):
-        super(MoveUpdate, self).__init__(committer)
+    def __init__(self, target_resource_href):
         self.target_resource_href = target_resource_href
 
     @classmethod
-    def from_json(cls, committer, data):
-        return cls(committer, data['targetResourceHref'])
+    def from_json(cls, data):
+        return cls(data['targetResourceHref'])
 
-    def __call__(self, committer, source):
+    def __call__(self, author, committer, source):
         raise NotImplementedError

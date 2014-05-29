@@ -6,10 +6,12 @@ import urllib.parse
 import wsgiref.handlers
 
 from django.core.exceptions import PermissionDenied
+from django.core.urlresolvers import reverse
 from django.db import transaction
 from django.utils.decorators import method_decorator
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, HttpResponseNotModified
+from django.shortcuts import get_object_or_404
 from django_conneg.http import HttpBadRequest, HttpGone, HttpConflict
 from django_conneg.views import JSONView
 import jsonpatch
@@ -18,6 +20,7 @@ from .mixins import JSONRequestMixin, VersioningMixin
 from .. import exceptions
 from ..models import Source, Resource
 from ..registry import get_resource_types_by_href, get_resource_type, get_source_types, get_source_type
+from ..update_source import SourceUpdater
 
 __all__ = ['SourceListView', 'SourceDetailView']
 
@@ -198,19 +201,15 @@ class SourceListView(SourceView):
         return self.get(request, resource_href, sources)
 
 class SourceDetailView(VersioningMixin, SourceView):
-    @method_decorator(login_required)
-    def dispatch(self, request, resource_type, identifier, source_type, **kwargs):
-        require_preexisting = request.method.lower() not in {'put'}
-        source = self.source_for_href(request.build_absolute_uri(),
-                                      require_preexisting)
-
-        source_types = get_resource_type(resource_type).source_types
-        if source_types is not None and source_type not in source_types:
-            raise exceptions.IncompatibleSourceType(resource_type, source_type)
-
-        return super(SourceDetailView, self).dispatch(request, source)
-
-    def get(self, request, source):
+    def get(self, request, resource_type, identifier, source_type, **kwargs):
+        try:
+            source = Source.objects.get(href=request.build_absolute_uri())
+        except Source.DoesNotExist:
+            resource_href = request.build_absolute_uri(reverse('halld:resource-detail', args=[resource_type,
+                                                                                              identifier]))
+            if not Resource.objects.filter(href=resource_href).count():
+                raise exceptions.SourceDataWithoutResource(resource_href)
+            raise exceptions.NoSuchSource(request.build_absolute_uri())
         if not request.user.has_perm('halld.view_source', source):
             raise PermissionDenied
         if self.check_version(source) is True:
@@ -225,34 +224,36 @@ class SourceDetailView(VersioningMixin, SourceView):
         return response
 
     @transaction.atomic
-    def put(self, request, source):
-        if self.check_version(source) is False:
-            raise HttpConflict
+    def put(self, request, resource_type, identifier, source_type, **kwargs):
         data = self.get_request_json('application/json')
-        if data is None: # PUT null to delete a source
-            return self.delete(request, source)
-        if not isinstance(data, dict):
-            raise exceptions.SourceValidationFailed
-        old_data = source.filter_data(request.user)
-        patch = jsonpatch.make_patch(old_data, data)
-        self.do_patch(request, source, patch)
-        return self.get(request, source)
-
-    @transaction.atomic
-    def patch(self, request, source):
-        if self.check_version(source) is False:
-            raise HttpConflict
-        patch = self.get_request_json('application/patch+json')
-        self.do_patch(request, source, patch)
-        return self.get(request, source)
-
-    @transaction.atomic
-    def delete(self, request, source):
-        self.do_delete(request, source)
+        source_updater = SourceUpdater(request.build_absolute_uri(),
+                                       request.user)
+        source_updater.perform_updates({'updates': [{'href': request.build_absolute_uri(),
+                                                     'method': 'PUT',
+                                                     'data': data}]})
         return HttpResponse(status=http.client.NO_CONTENT)
 
     @transaction.atomic
-    def move(self, request, source_data):
+    def patch(self, request, resource_type, identifier, source_type, **kwargs):
+        patch = self.get_request_json('application/patch+json')
+        source_updater = SourceUpdater(request.build_absolute_uri(),
+                                       request.user)
+        source_updater.perform_updates({'updates': [{'href': request.build_absolute_uri(),
+                                                     'method': 'PATCH',
+                                                     'patch': patch}]})
+        return HttpResponse(status=http.client.NO_CONTENT)
+
+    @transaction.atomic
+    def delete(self, request, resource_type, identifier, source_type, **kwargs):
+        source_updater = SourceUpdater(request.build_absolute_uri(),
+                                       request.user)
+        source_updater.perform_updates({'updates': [{'href': request.build_absolute_uri(),
+                                                     'method': 'DELETE'}]})
+        return HttpResponse(status=http.client.NO_CONTENT)
+
+
+    @transaction.atomic
+    def move(self, request, resource_type, identifier, source_type, **kwargs):
         raise NotImplementedError
         if not request.user.has_perm('halld.move_source', source_data):
             raise PermissionDenied

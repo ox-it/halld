@@ -103,7 +103,7 @@ class SourceManipulationTestCase(SourceTestCase):
                                    content_type='application/json')
         request.user = self.user
         response = self.source_view(request, 'snake', identifier, 'science')
-        self.assertEqual(response.status_code, http.client.OK)
+        self.assertEqual(response.status_code, http.client.NO_CONTENT)
         assert source_created.send.called
 
         # And check it's there
@@ -154,7 +154,7 @@ class SourceManipulationTestCase(SourceTestCase):
                                        content_type='application/json')
             request.user = self.user
 
-            with self.assertRaises(exceptions.SourceValidationFailed):
+            with self.assertRaises(exceptions.SchemaValidationError):
                 self.source_view(request, 'snake', identifier, 'science')
             assert not source_created.called
 

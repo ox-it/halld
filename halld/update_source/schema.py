@@ -1,38 +1,54 @@
 schema = {
-    "type": "array",
-    "items": {
-        "type": "object",
-        "oneOf": [{
-            "properties": {
-                "method": {"enum": ["PUT"]},
-                "resourceHref": {"type": "string", "format": "url"},
-                "sourceType": {"type": "string"},
-                "data": {"type": "object"},
+    "type": "object",
+    "properties": {
+        "updates": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "allOf": [{ # method
+                    "properties": {
+                        "method": {"enum": ["PUT", "DELETE", "PATCH", "MOVE"]},
+                    },
+                    "required": ["method"],
+                }, { # locating a source
+                    "oneOf": [{
+                        "properties": {
+                            "resourceHref": {"type": "string", "format": "url"},
+                            "sourceType": {"type": "string"},
+                        },
+                        "required": ["resourceHref", "sourceType"],
+                    }, {
+                        "properties": {
+                            "href": {"type": "string", "format": "uri"},
+                        },
+                        "required": ["href"],
+                    }],
+                }, { # each of the methods
+                   "oneOf": [{
+                        "properties": {
+                            "method": {"enum": ["PUT"]},
+                            "data": {"type": ["object", "null"]},
+                        },
+                        "required": ["data"],
+                    }, {
+                        "properties": {
+                            "method": {"enum": ["PATCH"]},
+                            "patch": {"type": "object"},
+                        },
+                        "required": ["patch"],
+                    }, {
+                        "properties": {
+                            "method": {"enum": ["DELETE"]},
+                        },
+                    }, {
+                        "properties": {
+                            "method": {"enum": ["MOVE"]},
+                            "targetResourceHref": {"type": "string", "format": "url"}
+                        },
+                        "required": ["targetResourceHref"],
+                    }],
+                }],
             },
-            "requiredProperties": ["method", "resourceHref", "sourceType", "data"],
-        }, {
-            "properties": {
-                "method": {"enum": ["PATCH"]},
-                "resourceHref": {"type": "string", "format": "url"},
-                "sourceType": {"type": "string"},
-                "patch": {"type": "object"},
-            },
-            "requiredProperties": ["method", "resourceHref", "sourceType", "patch"],
-        }, {
-            "properties": {
-                "method": {"enum": ["DELETE"]},
-                "resourceHref": {"type": "string", "format": "url"},
-                "sourceType": {"type": "string"},
-            },
-            "requiredProperties": ["method", "resourceHref", "sourceType"],
-        }, {
-            "properties": {
-                "method": {"enum": ["MOVE"]},
-                "resourceHref": {"type": "string", "format": "url"},
-                "sourceType": {"type": "string"},
-                "targetResourceHref": {"type": "string", "format": "url"}
-            },
-            "requiredProperties": ["method", "resourceHref", "sourceType", "targetResourceHref"],
-        }],
+        },
     },
 }
