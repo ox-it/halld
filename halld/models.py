@@ -380,6 +380,7 @@ class Source(models.Model, StaleFieldsMixin):
     def save(self, *args, **kwargs):
         created = not self.pk
         changed_values = self.get_changed_values()
+        cascade_to_resource = kwargs.pop('cascade_to_resource', True)
         if not self.href:
             self.href = self.resource_id + '/source/' + self.type_id
 
@@ -405,7 +406,8 @@ class Source(models.Model, StaleFieldsMixin):
                 signals.source_created.send(self)
             else:
                 signals.source_changed.send(self, old_data=changed_values['data'])
-            self.resource.save()
+            if cascade_to_resource:
+                self.resource.save()
         elif self.is_stale:
             super(Source, self).save(*args, **kwargs)
 

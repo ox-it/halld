@@ -146,3 +146,15 @@ class FileViewTestCase(FileTestCase):
         request.user = self.user
         response = self.file_detail_view(request, 'document', identifier)
         self.assertEqual(response.status_code, http.client.METHOD_NOT_ALLOWED)
+
+class FileMetadataTestCase(TestCase):
+    def upload_image(self):
+        request = self.factory.post("/document", {"file": self.test_file})
+        request.user = self.user
+        response = self.file_creation_view(request, "document")
+        path = response['Location'][17:]
+        identifier = path.split('/')[-1]
+        return path, identifier
+
+    def testImage(self):
+        pass

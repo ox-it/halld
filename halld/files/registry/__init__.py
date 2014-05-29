@@ -1,1 +1,2 @@
 from .resources import FileResourceTypeDefinition
+from .sources import FileMetadataSourceTypeDefinition

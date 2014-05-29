@@ -45,22 +45,30 @@ class NotValidIdentifier(HALLDException):
     description = 'The resource identifier is not valid'
     status_code = http.client.NOT_FOUND
 
-class LinkTargetDoesNotExist(HALLDException):
-    name = 'link-target-does-not-exist'
-    description = 'The source data contains a link to a resource that does not exist.'
+class NoSuchResource(HALLDException):
+    name = 'no-such-resource'
+    description = 'You are trying to update a source document for one or more resources that do not exist.'
     status_code = http.client.CONFLICT
 
-    def __init__(self, link_type, href):
-        self.link_type, self.href = link_type, href
+    def __init__(self, hrefs):
+        self.hrefs = hrefs
+
+    def as_hal(self):
+        hal = super(NoSuchResource, self).as_hal()
+        hal['_links'] = {
+            'missingResources': [{
+                'href': href,
+            } for href in self.hrefs],
+        }
+        return hal
+
+class LinkTargetDoesNotExist(NoSuchResource):
+    name = 'link-target-does-not-exist'
+    description = 'The source data contains a link to a resource that does not exist.'
 
     def as_hal(self):
         hal = super(LinkTargetDoesNotExist, self).as_hal()
-        hal['_links'] = {
-            'missingResources': [{
-                'href': self.href,
-            }],
-        }
-        hal['link_name'] = self.link_type.name
+        hal['linkType'] = self.link_type.name
         return hal
 
 class NoSuchSource(HALLDException):
@@ -239,3 +247,13 @@ class CantReturnTree(HALLDException):
     name = 'cant-return-tree'
     description = "You requested a tree representation, but you specified more than one link, or that link is not inverse-functional"
     status_code = http.client.BAD_REQUEST
+
+class MethodNotAllowed(HALLDException):
+    name = 'method-not-allowed'
+    description = 'The given HTTP method is not allowed'
+    status_code = http.client.METHOD_NOT_ALLOWED
+
+    def __init__(self, method, bad_request=False):
+        self.method = method
+        if bad_request:
+            self.status_code = http.client.BAD_REQUEST

@@ -8,6 +8,7 @@ jsonpatch
 jsonpointer
 jsonschema
 Markdown
+Pillow
 python-dateutil
 pytz
 rdflib

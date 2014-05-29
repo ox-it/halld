@@ -55,11 +55,11 @@ class HALLDView(ContentNegotiatedView, metaclass=abc.ABCMeta):
                 self.hal_to_jsonld(subresource)
         if 'href' in hal and '@id' not in hal:
             hal['@id'] = hal.pop('href')
+        hal.update(hal.pop('_links', {}))
+        hal.update(hal.pop('_embedded', {}))
         for key in list(hal):
             if key not in jsonld_context:
                 hal.pop(key)
-        hal.update(hal.pop('_links', {}))
-        hal.update(hal.pop('_embedded', {}))
 
     def get_jsonld_context(self):
         return getattr(settings, 'BASE_JSONLD_CONTEXT', {})

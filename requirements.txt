@@ -9,6 +9,7 @@ jsonpatch
 jsonpointer
 jsonschema
 Markdown
+Pillow
 psycopg2
 python-dateutil
 pytz

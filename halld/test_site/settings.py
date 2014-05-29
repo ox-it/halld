@@ -27,6 +27,7 @@ LINK_TYPES = [
 ]
 
 SOURCE_TYPES = [
+    'halld.files.metadata.ImageMetadataSourceTypeDefinition',
     SourceTypeDefinition.new('science'),
     SourceTypeDefinition.new('mythology'),
 ]
@@ -34,3 +35,5 @@ SOURCE_TYPES = [
 BASE_URL = 'http://testserver/'
 
 ROOT_URLCONF = 'halld.test_site.urls'
+
+FILE_METADATA_USER = 'file-metadata'

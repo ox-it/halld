@@ -14,9 +14,9 @@ from django_conneg.http import HttpResponseCreated
 
 from ..models import Resource
 import halld.exceptions
-from ..registry.resources import get_resource_type
+from ..registry.resources import get_resource_type, get_source_type
 
-from .registry import FileResourceTypeDefinition
+from .registry import FileResourceTypeDefinition, FileMetadataSourceTypeDefinition
 from . import conf
 from . import exceptions
 from .forms import UploadFileForm
@@ -39,6 +39,22 @@ class FileView(View):
             raise exceptions.NoFileUploaded
         else:
             self.process_file_from_request_body(request, resource_file, content_type)
+        self.update_file_metadata(request, resource_file)
+
+    def update_file_metadata(self, request, resource_file):
+        raise NotImplementedError
+        sources = []
+        for source in resource_file.resource.source_set.all():
+            source_type = get_source_type(source.type_id)
+            if isinstance(source_type, FileMetadataSourceTypeDefinition):
+                sources.append(source)
+        if not sources:
+            return
+        with resource_file.file.open() as fp:
+            fp.seek(0)
+            source.data = source.get_metadata(fp)
+            source.author = source.committer = request.user
+            source.save()
 
     def process_file_from_request_body(self, request, resource_file, content_type):
         handlers = request.upload_handlers

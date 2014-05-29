@@ -30,7 +30,7 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
         """
         return {}
 
-    source_types = None # Allow all by default
+    source_types = [] # Allow none by default
 
     @property
     def base_url(self):
