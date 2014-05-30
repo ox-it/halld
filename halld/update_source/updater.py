@@ -50,7 +50,7 @@ class SourceUpdater(object):
                 update['sourceType'] = match.group('source_type')
             else:
                 update['resourceHref'] = urljoin(self.base_href, update['resourceHref'])
-                update['href'] = '{}/source{}/'.format(update['resourceHref'], update['sourceType'])
+                update['href'] = '{}/source/{}'.format(update['resourceHref'], update['sourceType'])
         if bad_hrefs:
             raise exceptions.BadHrefs(bad_hrefs)
 
@@ -79,11 +79,14 @@ class SourceUpdater(object):
             try:
                 source = sources[update['href']]
             except KeyError:
+                # No need to create sources that would be deleted anyway
+                if method.will_delete:
+                    continue
                 if method.require_source_exists:
                     raise exceptions.NoSuchSource(update['href'])
                 source = Source(resource_id=update['resourceHref'],
                                 type_id=update['sourceType'])
-                sources[source.href] = source
+                sources[update['href']] = source
             result = method(self.author, self.committer, source)
             if result:
                 source.author = self.author

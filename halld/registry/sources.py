@@ -41,9 +41,12 @@ class SourceTypeDefinition(object, metaclass=abc.ABCMeta):
         return data
 
     def data_from_hal(self, data):
-        data.pop('_version', None)
-        data.pop('_sourceType', None)
-        data.pop('_links', None)
+        # It needs to be a dict, but if it isn't, it'll get picked up later
+        # in validate_data()
+        if isinstance(data, dict):
+            data.pop('_meta', None)
+            data.pop('_links', None)
+            data.pop('_embedded', None)
         return data
 
     def filter_data(self, user, source, data):
@@ -56,6 +59,8 @@ class SourceTypeDefinition(object, metaclass=abc.ABCMeta):
         """
         Override to perform validation, and raise a HALLDException if it fails.
         """
+        if not isinstance(data, dict):
+            raise exceptions.SourceDataMustBeObject
 
 class SchemaValidatedSourceTypeDefinition(SourceTypeDefinition):
     @abc.abstractproperty
@@ -92,6 +97,7 @@ class SchemaValidatedSourceTypeDefinition(SourceTypeDefinition):
             jsonschema.validate(data, self._schema)
         except jsonschema.ValidationError as e:
             raise exceptions.SchemaValidationError(e)
+        super(SchemaValidatedSourceTypeDefinition, self).validate_data(source, data)
 
 _local = threading.local()
 def get_source_types():

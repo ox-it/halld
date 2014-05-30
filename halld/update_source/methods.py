@@ -20,6 +20,7 @@ class Update(object, metaclass=abc.ABCMeta):
     # So that some updates (e.g. PUT) can not require that the source
     # already exists
     require_source_exists = True
+    will_delete = False
 
     @abc.abstractclassmethod
     def from_json(cls, committer, data):  # @NoSelf
@@ -34,6 +35,10 @@ class PutUpdate(Update):
 
     def __init__(self, data):
         self.data = data
+
+    @property
+    def will_delete(self):
+        return self.data is None
 
     @classmethod
     def from_json(cls, data):
@@ -100,6 +105,8 @@ class DeleteUpdate(Update):
     @classmethod
     def from_json(cls, data):
         return cls()
+
+    will_delete = True
 
     def __call__(self, author, committer, source):
         if not committer.has_perm('halld.delete_source', source):

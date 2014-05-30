@@ -111,7 +111,7 @@ class Resource(models.Model, StaleFieldsMixin):
             cascade_to = self.update_data()
             cascade_to -= regenerated
 
-        if 'data' in self.stale_fields:
+        if 'data' in self.stale_fields or created:
             changed_values = self.get_changed_values()
             self.created = self.created or now()
             self.modified = now()
@@ -410,6 +410,14 @@ class Source(models.Model, StaleFieldsMixin):
                 self.resource.save()
         elif self.is_stale:
             super(Source, self).save(*args, **kwargs)
+
+    # Override so we can compare sources before we save and set the PK
+    def __eq__(self, other):
+        return isinstance(other, self.__class__) and \
+            self.resource_id == other.resource_id and \
+            self.type_id == other.type_id
+    def __hash__(self):
+        return hash((self.resource_id, self.type_id))
 
 class LinkType(models.Model):
     name = models.SlugField(primary_key=True)

@@ -33,7 +33,7 @@ schema = {
                     }, {
                         "properties": {
                             "method": {"enum": ["PATCH"]},
-                            "patch": {"type": "object"},
+                            "patch": {"type": "array"},
                         },
                         "required": ["patch"],
                     }, {
