@@ -1,4 +1,4 @@
-import PIL
+import PIL.Image
 
 from ..registry import FileMetadataSourceTypeDefinition
 
@@ -7,6 +7,9 @@ class ImageMetadataSourceTypeDefinition(FileMetadataSourceTypeDefinition):
 
     def get_metadata(self, fp):
         metadata = {}
-        image = PIL.Image.open(fp)
+        try:
+            image = PIL.Image.open(fp)
+        except OSError: # cannot identify image file
+            raise NotImplementedError
         metadata['width'], metadata['height'] = image.size
         return metadata
