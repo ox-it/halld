@@ -1,3 +1,4 @@
+import collections
 import copy
 import datetime
 import hashlib
@@ -5,6 +6,7 @@ import logging
 from urllib.parse import urljoin
 
 from django.conf import settings
+from django.core.exceptions import PermissionDenied
 from django.core.urlresolvers import reverse
 from django.contrib.auth.models import User
 from django.db import IntegrityError
@@ -17,7 +19,7 @@ from stalefields.stalefields import StaleFieldsMixin
 
 from . import signals, exceptions
 from .registry import get_link_types, get_link_type
-from .registry import get_resource_types, get_resource_type
+from .registry import ResourceTypeDefinition, get_resource_types, get_resource_type
 from .registry import get_source_type
 from .conf import is_spatial_backend
 
@@ -40,6 +42,9 @@ def localize(dt):
     if not dt.tzinfo:
         dt = pytz.timezone(settings.TIME_ZONE).localize(dt)
     return dt
+
+def recursive_default_dict():
+    return collections.defaultdict(recursive_default_dict)
 
 class ResourceType(models.Model):
     name = models.SlugField(primary_key=True)
@@ -81,9 +86,10 @@ class Resource(models.Model, StaleFieldsMixin):
         return hashlib.sha1("{}/{}".format(self.href, self.version).encode()).hexdigest()
 
     def regenerate(self):
-        raw_data = {'@source': {},
-                    'href': self.get_absolute_url(),
-                    'identifier': {}}
+        raw_data = recursive_default_dict()
+        raw_data['href'] = self.get_absolute_url()
+        raw_data['@source'] = {}
+        raw_data['identifier'] = {}
         for source in self.source_set.all():
             raw_data['@source'][source.type_id] = copy.deepcopy(source.data)
         self.collect_identifiers(raw_data)
@@ -174,7 +180,7 @@ class Resource(models.Model, StaleFieldsMixin):
             point = self.raw_data.get('@point')
             if isinstance(point, dict):
                 try:
-                    self.point = Point(point['lat'], point['lon'], point.get('alt'), srid=4326)
+                    self.point = Point(point['lon'], point['lat'], point.get('ele'), srid=4326)
                 except Exception:
                     logger.exception("Couldn't set point from dict: %r", point)
                     self.point = None
@@ -320,6 +326,28 @@ class Resource(models.Model, StaleFieldsMixin):
         if user.is_superuser:
             return data
         return self.get_type().filter_data(user, self, data)
+
+    @classmethod
+    def create(cls, creator, resource_type, identifier=None):
+        if not isinstance(resource_type, ResourceTypeDefinition):
+            resource_type = get_resource_type(resource_type)
+        if not resource_type.user_can_create(creator):
+            raise PermissionDenied
+        if not identifier:
+            identifier = resource_type.generate_identifier()
+        elif not resource_type.user_can_assign_identifier(creator, identifier):
+            raise exceptions.CannotAssignIdentifier
+        try:
+            return Resource.objects.create(type_id=resource_type.name,
+                                           identifier=identifier,
+                                           creator=creator)
+        except IntegrityError as e:
+            try:
+                resource = Resource.objects.get(type_id=resource_type.name,
+                                                identifier=identifier)
+                raise exceptions.ResourceAlreadyExists(resource)
+            except Resource.DoesNotExist:
+                raise e
 
     def __str__(self):
         if 'title' in self.data:

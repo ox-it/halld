@@ -2,6 +2,7 @@ import http.client
 import os
 
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
 from django.core.files.uploadhandler import TemporaryFileUploadHandler
 from django.core.urlresolvers import reverse
@@ -15,7 +16,7 @@ from django_conneg.http import HttpResponseCreated
 from ..models import Resource
 import halld.exceptions
 from ..registry.resources import get_resource_type, get_source_type
-
+from ..update_source import SourceUpdater
 from .registry import FileResourceTypeDefinition, FileMetadataSourceTypeDefinition
 from . import conf
 from . import exceptions
@@ -41,21 +42,6 @@ class FileView(View):
             self.process_file_from_request_body(request, resource_file, content_type)
         self.update_file_metadata(request, resource_file)
 
-    def update_file_metadata(self, request, resource_file):
-        raise NotImplementedError
-        sources = []
-        for source in resource_file.resource.source_set.all():
-            source_type = get_source_type(source.type_id)
-            if isinstance(source_type, FileMetadataSourceTypeDefinition):
-                sources.append(source)
-        if not sources:
-            return
-        with resource_file.file.open() as fp:
-            fp.seek(0)
-            source.data = source.get_metadata(fp)
-            source.author = source.committer = request.user
-            source.save()
-
     def process_file_from_request_body(self, request, resource_file, content_type):
         handlers = request.upload_handlers
         content_length = int(request.META.get('CONTENT_LENGTH', 0))
@@ -71,6 +57,38 @@ class FileView(View):
         resource_file.file = handler.file_complete(content_length)
         resource_file.content_type = content_type
         resource_file.save()
+
+    def update_file_metadata(self, request, resource_file):
+        source_types = resource_file.resource.get_type().source_types
+        source_types = (get_source_type(source_type) for source_type in source_types)
+        source_types = [source_type for source_type in source_types
+                        if isinstance(source_type, FileMetadataSourceTypeDefinition)]
+        if not source_types:
+            return
+        updates = []
+        resource_file.file.open()
+        try:
+            for source_type in source_types:
+                resource_file.file.seek(0)
+                try:
+                    data = source_type.get_metadata(resource_file.file)
+                except NotImplementedError:
+                    data = None
+                update = {
+                    'method': 'PUT',
+                    'resourceHref': resource_file.resource_id,
+                    'sourceType': source_type.name,
+                    'data': data,
+                }
+                updates.append(update)
+        finally:
+            resource_file.file.close()
+
+        committer = get_user_model().objects.get(username=conf.FILE_METADATA_USER)
+        source_updater = SourceUpdater(request.build_absolute_uri(),
+                                       author=request.user,
+                                       committer=committer)
+        source_updater.perform_updates({'updates': updates})
 
 class FileCreationView(ResourceListView, FileView):
     @method_decorator(login_required)

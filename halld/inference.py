@@ -1,4 +1,5 @@
 import abc
+import collections
 import logging
 
 import jsonpointer
@@ -36,6 +37,8 @@ class FirstOf(FromPointers):
         for pointer in self.pointers:
             try:
                 result = jsonpointer.resolve_pointer(data, pointer)
+                if isinstance(result, collections.defaultdict) and len(result) == 0:
+                    continue
                 if self.update:
                     target = jsonpointer.resolve_pointer(data, self.target)
                     if not isinstance(target, dict):
@@ -49,6 +52,11 @@ class FirstOf(FromPointers):
                 return
             except jsonpointer.JsonPointerException:
                 pass
+
+    def __repr__(self):
+        return 'FirstOf({!r}, {}{})'.format(self.target,
+                                            ', '.join(map(repr, self.pointers)),
+                                            ', update=True' if self.update else '')
 
 class Set(FromPointers):
     """
@@ -68,6 +76,8 @@ class Set(FromPointers):
         result = set()
         for pointer in self.pointers:
             value = jsonpointer.resolve_pointer(data, pointer, [])
+            if isinstance(value, collections.defaultdict):
+                continue
             if not isinstance(value, (list, set)):
                 value = {value}
             result.update(value)

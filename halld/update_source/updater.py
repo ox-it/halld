@@ -54,17 +54,17 @@ class SourceUpdater(object):
         if bad_hrefs:
             raise exceptions.BadHrefs(bad_hrefs)
 
-        hrefs = set(update['href'] for update in updates)
+        resource_hrefs = set(update['resourceHref'] for update in updates)
         source_types = set(update['sourceType'] for update in updates)
 
         missing_source_types = source_types - set(get_source_types())
         if missing_source_types:
             raise exceptions.NoSuchSourceType(missing_source_types)
 
-        resources = {r.href: r for r in Resource.objects.filter(href__in=hrefs)}
-        missing_hrefs = set(resources) - hrefs
+        resources = {r.href: r for r in Resource.objects.filter(href__in=resource_hrefs)}
+        missing_hrefs = resource_hrefs - set(resources)
         if missing_hrefs:
-            raise exceptions.NoSuchResource(missing_hrefs)
+            raise exceptions.SourceDataWithoutResource(missing_hrefs)
 
         source_hrefs = set(update['href'] for update in updates)
         sources = {s.href: s for s in Source.objects.select_for_update().filter(href__in=source_hrefs)}
@@ -84,7 +84,7 @@ class SourceUpdater(object):
                     continue
                 if method.require_source_exists:
                     raise exceptions.NoSuchSource(update['href'])
-                source = Source(resource_id=update['resourceHref'],
+                source = Source(resource=resources[update['resourceHref']],
                                 type_id=update['sourceType'])
                 sources[update['href']] = source
             result = method(self.author, self.committer, source)

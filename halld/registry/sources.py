@@ -46,7 +46,6 @@ class SourceTypeDefinition(object, metaclass=abc.ABCMeta):
         if isinstance(data, dict):
             data.pop('_meta', None)
             data.pop('_links', None)
-            data.pop('_embedded', None)
         return data
 
     def filter_data(self, user, source, data):

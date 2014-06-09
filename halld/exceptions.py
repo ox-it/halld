@@ -51,6 +51,8 @@ class NoSuchResource(HALLDException):
     status_code = http.client.CONFLICT
 
     def __init__(self, hrefs):
+        if not isinstance(hrefs, (list, tuple)):
+            hrefs = (hrefs,)
         self.hrefs = hrefs
 
     def as_hal(self):
@@ -65,6 +67,10 @@ class NoSuchResource(HALLDException):
 class LinkTargetDoesNotExist(NoSuchResource):
     name = 'link-target-does-not-exist'
     description = 'The source data contains a link to a resource that does not exist.'
+
+    def __init__(self, link_type, hrefs):
+        super(LinkTargetDoesNotExist, self).__init__(hrefs)
+        self.link_type = link_type
 
     def as_hal(self):
         hal = super(LinkTargetDoesNotExist, self).as_hal()

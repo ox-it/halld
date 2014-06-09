@@ -46,7 +46,7 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
         inferences = []
         if self.source_types is not None:
             for source_type in self.source_types:
-                source_type= get_source_type(source_type)
+                source_type = get_source_type(source_type)
                 inferences.extend(source_type.get_inferences())
         from .. import inference
         inferences.append(inference.Types())
