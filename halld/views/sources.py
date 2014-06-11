@@ -101,7 +101,10 @@ class SourceDetailView(VersioningMixin, SourceView):
     @transaction.atomic
     def put(self, request, resource_type, identifier, source_type, **kwargs):
         hal = self.get_request_json('application/hal+json')
-        data = get_source_type(source_type).data_from_hal(hal)
+        try:
+            data = get_source_type(source_type).data_from_hal(hal)
+        except KeyError:
+            raise exceptions.NoSuchSourceType
         self.source_updater.perform_updates({'updates': [{'href': request.build_absolute_uri(),
                                                           'method': 'PUT',
                                                           'data': data}]})
