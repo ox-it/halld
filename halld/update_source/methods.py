@@ -51,6 +51,8 @@ class PutUpdate(Update):
             delete_update = DeleteUpdate()
             return delete_update(author, committer, source)
         else:
+            if not committer.has_perm('halld.view_source', source):
+                raise exceptions.Forbidden(committer)
             creating = not source.pk
             was_deleted = source.deleted
             source.deleted = False
@@ -77,7 +79,7 @@ class PatchUpdate(Update):
 
     def __call__(self, author, committer, source):
         if not committer.has_perm('halld.change_source', source):
-            raise PermissionDenied
+            raise exceptions.Forbidden(committer)
         if not self.patch:
             return
         if source.deleted:
@@ -110,7 +112,7 @@ class DeleteUpdate(Update):
 
     def __call__(self, author, committer, source):
         if not committer.has_perm('halld.delete_source', source):
-            raise PermissionDenied
+            raise exceptions.Forbidden(committer)
         if not source.deleted:
             source.deleted = True
             source.data = None

@@ -1,8 +1,6 @@
 import http.client
 import json
-import re
 from time import mktime
-import urllib.parse
 import wsgiref.handlers
 
 from django.core.exceptions import PermissionDenied
@@ -11,15 +9,13 @@ from django.db import transaction
 from django.utils.decorators import method_decorator
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, HttpResponseNotModified
-from django.shortcuts import get_object_or_404
-from django_conneg.http import HttpBadRequest, HttpGone, HttpConflict
+from django_conneg.http import HttpBadRequest, HttpGone
 from django_conneg.views import JSONView
-import jsonpatch
 
 from .mixins import JSONRequestMixin, VersioningMixin
 from .. import exceptions
 from ..models import Source, Resource
-from ..registry import get_resource_types_by_href, get_resource_type, get_source_types, get_source_type
+from ..registry import get_resource_type, get_source_type
 from ..update_source import SourceUpdater
 
 __all__ = ['SourceListView', 'SourceDetailView']
@@ -36,7 +32,6 @@ class BulkSourceUpdateView(SourceView):
         raise NotImplementedError
 
 class SourceListView(SourceView):
-    @method_decorator(login_required)
     def dispatch(self, request, resource_type, identifier, **kwargs):
         try:
             resource_type = get_resource_type(resource_type)
@@ -126,16 +121,6 @@ class SourceDetailView(VersioningMixin, SourceView):
                                                           'method': 'DELETE'}]})
         return HttpResponse(status=http.client.NO_CONTENT)
 
-
     @transaction.atomic
     def move(self, request, resource_type, identifier, source_type, **kwargs):
         raise NotImplementedError
-        if not request.user.has_perm('halld.move_source', source_data):
-            raise PermissionDenied
-
-        # TODO: Finish
-        try:
-            destination = request.META['HTTP_DESTINATION']
-            destination = urllib.parse.urlparse(destination)
-        except KeyError:
-            raise HttpBadRequest

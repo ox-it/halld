@@ -263,3 +263,19 @@ class MethodNotAllowed(HALLDException):
         self.method = method
         if bad_request:
             self.status_code = http.client.BAD_REQUEST
+
+class Unauthorized(HALLDException):
+    name = 'unauthorized'
+    description = 'You need to authenticate to do that.'
+    status_code = http.client.UNAUTHORIZED
+
+class Forbidden(HALLDException):
+    name = 'forbidden'
+    description = 'You do not have permission to do that.'
+    status_code = http.client.FORBIDDEN
+
+    def __init__(self, user):
+        if not request.user.is_authenticated:
+            self.name = 'unauthorized'
+            self.description = 'You need to authenticate to do that.'
+            self.status_code = http.client.UNAUTHORIZED

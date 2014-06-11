@@ -3,7 +3,6 @@ import collections
 import re
 from urllib.parse import urljoin
 
-from django.core.exceptions import PermissionDenied
 import jsonschema
 
 from .schema import schema
