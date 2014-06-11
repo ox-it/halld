@@ -3,7 +3,6 @@ import json
 from time import mktime
 import wsgiref.handlers
 
-from django.core.exceptions import PermissionDenied
 from django.core.urlresolvers import reverse
 from django.db import transaction
 from django.utils.decorators import method_decorator
@@ -86,7 +85,7 @@ class SourceDetailView(VersioningMixin, SourceView):
                 raise exceptions.SourceDataWithoutResource(resource_href)
             raise exceptions.NoSuchSource(request.build_absolute_uri())
         if not request.user.has_perm('halld.view_source', source):
-            raise PermissionDenied
+            raise exceptions.Forbidden(request.user)
         if self.check_version(source) is True:
             return HttpResponseNotModified()
         if source.deleted:

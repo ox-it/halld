@@ -1,7 +1,6 @@
 import http.client
 import json
 
-from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.core.urlresolvers import reverse
 from django.db import transaction

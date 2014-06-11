@@ -1,7 +1,6 @@
 import abc
 import enum
 
-from django.core.exceptions import PermissionDenied
 import jsonpatch
 
 from .. import exceptions

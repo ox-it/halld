@@ -6,7 +6,6 @@ import logging
 from urllib.parse import urljoin
 
 from django.conf import settings
-from django.core.exceptions import PermissionDenied
 from django.core.urlresolvers import reverse
 from django.contrib.auth.models import User
 from django.db import IntegrityError
@@ -332,7 +331,7 @@ class Resource(models.Model, StaleFieldsMixin):
         if not isinstance(resource_type, ResourceTypeDefinition):
             resource_type = get_resource_type(resource_type)
         if not resource_type.user_can_create(creator):
-            raise PermissionDenied
+            raise exceptions.Forbidden(creator)
         if not identifier:
             identifier = resource_type.generate_identifier()
         elif not resource_type.user_can_assign_identifier(creator, identifier):
