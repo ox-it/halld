@@ -1,11 +1,14 @@
 from django.core.urlresolvers import reverse
+from django_conneg.views import HTMLView
 
 from .base import HALLDView
 from ..registry import get_resource_types
 
 __all__ = ['IndexView']
 
-class IndexView(HALLDView):
+class IndexView(HALLDView, HTMLView):
+    template_name = 'index'
+
     def get(self, request):
         return self.render()
 
