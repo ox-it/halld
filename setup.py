@@ -1,4 +1,4 @@
-from distutils.core import setup
+from setuptools import setup, find_packages
 
 # Idea borrowed from http://cburgmer.posterous.com/pip-requirementstxt-and-setuppy
 install_requires, dependency_links = [], []
@@ -17,19 +17,7 @@ except ImportError:
 setup(
     name='halld',
     version='0.1',
-    packages=[
-        'halld',
-        'halld.files',
-        'halld.management',
-        'halld.markdown',
-        'halld.pubsub',
-        'halld.registry',
-        'halld.test',
-        'halld.test_site',
-        'halld.update_source',
-        'halld.util',
-        'halld.views',
-    ],
+    packages=find_packages(),
     install_requires=install_requires,
     dependency_links=dependency_links,
 )
