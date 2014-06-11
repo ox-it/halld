@@ -104,7 +104,7 @@ class SourceDetailView(VersioningMixin, SourceView):
         try:
             data = get_source_type(source_type).data_from_hal(hal)
         except KeyError:
-            raise exceptions.NoSuchSourceType
+            raise exceptions.NoSuchSourceType(source_type)
         self.source_updater.perform_updates({'updates': [{'href': request.build_absolute_uri(),
                                                           'method': 'PUT',
                                                           'data': data}]})
