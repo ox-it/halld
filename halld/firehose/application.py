@@ -1,5 +1,8 @@
+<<<<<<< HEAD
 # Design based on http://toastdriven.com/blog/2011/jul/31/gevent-long-polling-you/
 
+=======
+>>>>>>> A working firehose
 import calendar
 import datetime
 import http.client
