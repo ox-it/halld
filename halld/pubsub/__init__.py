@@ -1,2 +1,2 @@
-class PubSub(object):
-    pass
+from . import redis
+
