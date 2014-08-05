@@ -14,9 +14,9 @@ SOURCE_CHANGED = 'halld:pubsub:source:changed'
 SOURCE_DELETED = 'halld:pubsub:source:deleted'
 SOURCE_MOVED = 'halld:pubsub:source:moved'
 
-RESOURCE_CREATED = b'halld:pubsub:resource:created'
-RESOURCE_CHANGED = b'halld:pubsub:resource:changed'
-RESOURCE_DELETED = b'halld:pubsub:resource:deleted'
+RESOURCE_CREATED = 'halld:pubsub:resource:created'
+RESOURCE_CHANGED = 'halld:pubsub:resource:changed'
+RESOURCE_DELETED = 'halld:pubsub:resource:deleted'
 
 IDENTIFIER_ADDED = 'halld:pubsub:identifier:added'
 IDENTIFIER_CHANGED = 'halld:pubsub:identifier:changed'
