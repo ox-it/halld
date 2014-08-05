@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.core.urlresolvers import reverse
 from django_conneg.views import HTMLView
 
@@ -37,4 +38,6 @@ class IndexView(HALLDView, HTMLView):
                 'href': reverse('halld:resource-type-detail', args=[resource_type.name])}
             for resource_type in get_halld_config().resource_types.values()
         })
+        if getattr(settings, 'FIREHOSE_URL', None):
+            hal['_links']['firehose'] = {'href': settings.FIREHOSE_URL}
         return hal
