@@ -36,22 +36,23 @@ class FirstOf(FromPointers):
     def __call__(self, resource, data):
         for pointer in self.pointers:
             try:
-                result = jsonpointer.resolve_pointer(data, pointer)
-                if isinstance(result, collections.defaultdict) and len(result) == 0:
+                result = data.resolve(pointer)
+            except jsonpointer.JsonPointerException:
+                continue
+            if self.update:
+                if not isinstance(result, dict):
                     continue
-                if self.update:
-                    target = jsonpointer.resolve_pointer(data, self.target)
+                try:
+                    target = data.resolve(self.target)
                     if not isinstance(target, dict):
                         logger.warning("FirstOf target %s is not a dict", self.target)
                         return
-                    if not isinstance(result, dict):
-                        continue
                     target.update(result)
-                else:
-                    jsonpointer.set_pointer(data, self.target, result)
-                return
-            except jsonpointer.JsonPointerException:
-                pass
+                except jsonpointer.JsonPointerException:
+                    data.set(self.target, result)
+            else:
+                data.set(self.target, result)
+            return
 
     def __repr__(self):
         return 'FirstOf({!r}, {}{})'.format(self.target,

@@ -1,6 +1,7 @@
 from django.test import TestCase
 import mock
 
+from ..data import Data
 from .. import inference
 
 class InferenceTestCase(TestCase):
@@ -8,15 +9,15 @@ class InferenceTestCase(TestCase):
         resource = mock.Mock()
         first_of = inference.FirstOf('/target', '/source/one', '/source/two')
         
-        data = {'source': {'one': 'hello'}}
+        data = Data({'source': {'one': 'hello'}})
         first_of(resource, data)
         self.assertEqual(data.get('target'), 'hello')
 
-        data = {'source': {'one': 'hello', 'two': 'goodbye'}}
+        data = Data({'source': {'one': 'hello', 'two': 'goodbye'}})
         first_of(resource, data)
         self.assertEqual(data.get('target'), 'hello')
 
-        data = {'source': {'two': 'goodbye'}}
+        data = Data({'source': {'two': 'goodbye'}})
         first_of(resource, data)
         self.assertEqual(data.get('target'), 'goodbye')
 
@@ -24,8 +25,8 @@ class InferenceTestCase(TestCase):
         resource = mock.Mock()
         first_of = inference.FirstOf('/target', '/0', '/source/~0/~1/2/one', '/source/two')
         
-        data = {'source': {'~': {'/': [4, 'eek', {'one': 'hello'}]},
-                           'two': 'goodbye'}}
+        data = Data({'source': {'~': {'/': [4, 'eek', {'one': 'hello'}]},
+                                'two': 'goodbye'}})
         first_of(resource, data)
         self.assertEqual(data.get('target'), 'hello')
 

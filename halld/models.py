@@ -1,4 +1,3 @@
-import collections
 import copy
 import datetime
 import hashlib
@@ -21,6 +20,7 @@ from .registry import get_link_types, get_link_type
 from .registry import ResourceTypeDefinition, get_resource_types, get_resource_type
 from .registry import get_source_type
 from .conf import is_spatial_backend
+from .data import Data
 
 if is_spatial_backend:
     from django.contrib.gis.db import models
@@ -41,9 +41,6 @@ def localize(dt):
     if not dt.tzinfo:
         dt = pytz.timezone(settings.TIME_ZONE).localize(dt)
     return dt
-
-def recursive_default_dict():
-    return collections.defaultdict(recursive_default_dict)
 
 class ResourceType(models.Model):
     name = models.SlugField(primary_key=True)
@@ -85,7 +82,7 @@ class Resource(models.Model, StaleFieldsMixin):
         return hashlib.sha1("{}/{}".format(self.href, self.version).encode()).hexdigest()
 
     def regenerate(self):
-        raw_data = recursive_default_dict()
+        raw_data = Data()
         raw_data['href'] = self.get_absolute_url()
         raw_data['@source'] = {}
         raw_data['identifier'] = {}
@@ -341,12 +338,7 @@ class Resource(models.Model, StaleFieldsMixin):
                                            identifier=identifier,
                                            creator=creator)
         except IntegrityError as e:
-            try:
-                resource = Resource.objects.get(type_id=resource_type.name,
-                                                identifier=identifier)
-                raise exceptions.ResourceAlreadyExists(resource)
-            except Resource.DoesNotExist:
-                raise e
+            raise exceptions.ResourceAlreadyExists(resource_type, identifier)
 
     def __str__(self):
         if 'title' in self.data:
