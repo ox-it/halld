@@ -1,6 +1,9 @@
+# Design based on http://toastdriven.com/blog/2011/jul/31/gevent-long-polling-you/
+
 import calendar
 import datetime
 import http.client
+import urllib.parse
 import pickle
 
 from gevent import monkey
@@ -9,19 +12,17 @@ from gevent import pywsgi
 from gevent import queue
 import redis
 
+import dateutil.parser
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
 import pytz
 import ujson
 
-from ..models import Resource, Identifier
+from ..models import Resource
 from ..pubsub.redis import (
     RESOURCE_CREATED,
     RESOURCE_CHANGED,
     RESOURCE_DELETED,
-    IDENTIFIER_ADDED,
-    IDENTIFIER_CHANGED,
-    IDENTIFIER_REMOVED,
 )
 
 CHANNEL_TO_EVENT = {
@@ -40,44 +41,33 @@ def push_resource(body, user, event, resource):
         'identifier': resource.identifier,
         'data': data,
         'href': resource.href,
+        'when': resource.modified.isoformat(),
     }
     body.put(ujson.dumps(event).encode('utf-8') + b'\n')
 
-def firehose(body, username):
+def firehose(body, username, start):
     user = get_user_model().objects.get(username=username)
     client = redis.Redis(**settings.REDIS_PARAMS)
     pubsub = client.pubsub()
     pubsub.subscribe(RESOURCE_CREATED)
     pubsub.subscribe(RESOURCE_CHANGED)
     pubsub.subscribe(RESOURCE_DELETED)
-#    pubsub.psubscribe('*')
     messages = pubsub.listen()
 
-    last_seen = client.zscore(LAST_SEEN, user.username) or 0
-    last_seen = pytz.utc.localize(datetime.datetime.fromtimestamp(last_seen))
-    last_modified = last_seen
-
-    for resource in Resource.objects.filter(modified__gt=last_seen):
+    for resource in Resource.objects.filter(modified__gt=start):
         if not user.has_perm('halld.view_resource', resource):
             continue
-        if resource.created > last_seen and resource.deleted:
+        if resource.created > start and resource.deleted:
             continue
-        if resource.created > last_seen:
+        if resource.created > start:
             event = 'resource-created'
         elif resource.deleted:
             event = 'resource-deleted'
         else:
             event = 'resource-changed'
         push_resource(body, user, event, resource)
-        last_modified = max(last_modified, resource.modified)
-       
-    client.zadd(LAST_SEEN, username,
-                calendar.timegm(last_modified.timetuple()))
 
     for message in messages:
-        import sys
-        sys.stderr.write(message['type'])
-        sys.stderr.write('\n')
         if message['type'] != 'message':
             continue
         data = pickle.loads(message['data'])
@@ -87,18 +77,30 @@ def firehose(body, username):
 
 
 def application(environ, start_response):
-    username = environ.get('REMOTE_USER')
-    if not username:
+    remote_user = 'kebl2765' #environ.get('REMOTE_USER')
+    if not remote_user:
         start_response('401 UNAUTHORIZED', [])
         return iter([])
-    user = True #authenticate(username=username)
+    user = authenticate(remote_user=remote_user)
     if not user:
         start_response('403 FORBIDDEN', [])
         return iter([])
 
+    qs = urllib.parse.parse_qs(environ.get('QUERY_STRING', ''))
+    if 'start' in qs:
+        try:
+            start = dateutil.parser.parse(qs['start'][0])
+        except ValueError:
+            start_response('400 BAD REQUEST', [])
+            return iter(['start parameter must be a datetime.\n'])
+        if not start.tzinfo:
+            start = pytz.timezone(settings.TIME_ZONE).localize(start)
+    else:
+        start = pytz.utc.localize(datetime.datetime.utcnow())
+
     start_response('200 OK', [])
     body = queue.Queue()
-    gevent.spawn(firehose, body, username)
+    gevent.spawn(firehose, body, remote_user, start)
     return body
 
 def initialize():
