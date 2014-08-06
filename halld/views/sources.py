@@ -13,17 +13,17 @@ from django_conneg.views import JSONView
 
 from .mixins import JSONRequestMixin, VersioningMixin
 from .. import exceptions
-from ..models import Source, Resource
+from ..models import Source, Resource, Changeset
 from ..registry import get_resource_type, get_source_type
-from ..changeset import SourceUpdater
+from halld.changeset import SourceUpdater
 
 __all__ = ['SourceListView', 'SourceDetailView']
 
 class SourceView(JSONView, JSONRequestMixin):
-    def dispatch(self, request, *args, **kwargs):
-        self.source_updater = SourceUpdater(request.build_absolute_uri(),
-                                            request.user)
-        return JSONView.dispatch(self, request, *args, **kwargs)
+    def get_new_changeset(self, data):
+        return Changeset(base_href=self.request.build_absolute_uri(),
+                         author=self.request.user,
+                         data=data)
 
 class BulkSourceUpdateView(SourceView):
     @method_decorator(login_required)
@@ -52,7 +52,6 @@ class SourceListView(SourceView):
                                 content_type='application/hal+json')
         return response
 
-    @transaction.atomic
     def put(self, request, resource_href):
         data = self.get_request_json('application/hal+json')
         embedded = data.get('_embedded')
@@ -71,7 +70,8 @@ class SourceListView(SourceView):
                 'data': embedded[name],
             })
 
-        self.source_updater.perform_updates({'updates': updates})
+        changeset = self.get_new_changeset({'updates': updates})
+        changeset.perform()
         return HttpResponse(status=http.client.NO_CONTENT)
 
 class SourceDetailView(VersioningMixin, SourceView):
@@ -97,30 +97,32 @@ class SourceDetailView(VersioningMixin, SourceView):
         response['ETag'] = source.get_etag()
         return response
 
-    @transaction.atomic
     def put(self, request, resource_type, identifier, source_type, **kwargs):
         hal = self.get_request_json('application/hal+json')
         try:
             data = get_source_type(source_type).data_from_hal(hal)
         except KeyError:
             raise exceptions.NoSuchSourceType(source_type)
-        self.source_updater.perform_updates({'updates': [{'href': request.build_absolute_uri(),
+
+        changeset = self.get_new_changeset({'updates': [{'href': request.build_absolute_uri(),
                                                           'method': 'PUT',
                                                           'data': data}]})
+        changeset.perform()
         return HttpResponse(status=http.client.NO_CONTENT)
 
-    @transaction.atomic
     def patch(self, request, resource_type, identifier, source_type, **kwargs):
         patch = self.get_request_json('application/patch+json')
-        self.source_updater.perform_updates({'updates': [{'href': request.build_absolute_uri(),
-                                                          'method': 'PATCH',
-                                                          'patch': patch}]})
+        changeset = self.get_new_changeset({'updates': [{'href': request.build_absolute_uri(),
+                                                         'method': 'PATCH',
+                                                         'patch': patch}]})
+        changeset.perform()
         return HttpResponse(status=http.client.NO_CONTENT)
 
     @transaction.atomic
     def delete(self, request, resource_type, identifier, source_type, **kwargs):
-        self.source_updater.perform_updates({'updates': [{'href': request.build_absolute_uri(),
-                                                          'method': 'DELETE'}]})
+        changeset = self.get_new_changeset({'updates': [{'href': request.build_absolute_uri(),
+                                                         'method': 'DELETE'}]})
+        changeset.perform()
         return HttpResponse(status=http.client.NO_CONTENT)
 
     @transaction.atomic

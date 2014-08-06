@@ -31,10 +31,6 @@ class SourceUpdater(object):
         """
         Updates sources and fires events.
         """
-        try:
-            jsonschema.validate(data, self.schema)
-        except jsonschema.ValidationError as e:
-            raise exceptions.SchemaValidationError(e)
         from ..models import Resource, Source
 
         updates = data['updates']

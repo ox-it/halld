@@ -485,7 +485,7 @@ class Changeset(models.Model):
     committer = models.ForeignKey(User, null=True, blank=True, related_name='committer_of_changeset')
     version = models.PositiveIntegerField(default=0)
 
-    base_url = models.TextField()
+    base_href = models.TextField()
     perform_at = models.DateTimeField(null=True, blank=True)
     performed = models.DateTimeField(null=True, blank=True)
     state = models.CharField(max_length=30, choices=CHANGESET_STATE_CHOICES) 
@@ -494,28 +494,30 @@ class Changeset(models.Model):
     description = models.TextField(blank=True)
 
     def save(self, *args, **kwargs):
-        try:
-            jsonschema.validate(self.data, changeset.schema)
-        except jsonschema.ValidationError as e:
-            raise exceptions.SchemaValidationError(e)
         if 'performAt' in self.data:
             self.scheduled = dateutil.parser.parse(self.data['performAt'])
         else:
             self.scheduled = None
-        self.description = self.data.get('description')
+        self.description = self.data.get('description', '')
         self.version += 1
         return super(Changeset, self).save(*args, **kwargs)
     
     @transaction.atomic
     def perform(self):
+        if self.state in ('pending-approval', 'performed', 'failed'):
+            return
+        try:
+            jsonschema.validate(self.data, changeset.schema)
+        except jsonschema.ValidationError as e:
+            raise exceptions.SchemaValidationError(e)
         if self.pk:
             try:
                 Changeset.objects.select_for_update().get(pk=self.pk, version=self.version)
             except Changeset.DoesNotExist:
                 raise exceptions.ChangesetConflict
-        updater = changeset.SourceUpdater(self.base_url, self.author, self.committer)
+        updater = changeset.SourceUpdater(self.base_href, self.author, self.committer)
         try:
-            with transaction.atomic:
+            with transaction.atomic():
                 updater.perform_updates(self.data)
         except Exception:
             self.state = 'failed'
