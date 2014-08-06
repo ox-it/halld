@@ -7,7 +7,6 @@ import jsonschema
 
 from .schema import schema
 from . import methods
-from ..models import Resource, Source
 from ..registry import get_source_types, get_source_type
 from .. import exceptions
 
@@ -36,6 +35,8 @@ class SourceUpdater(object):
             jsonschema.validate(data, self.schema)
         except jsonschema.ValidationError as e:
             raise exceptions.SchemaValidationError(e)
+        from ..models import Resource, Source
+
         updates = data['updates']
 
         bad_hrefs = set()

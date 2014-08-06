@@ -7,8 +7,9 @@ from urllib.parse import urljoin
 from django.conf import settings
 from django.core.urlresolvers import reverse
 from django.contrib.auth.models import User
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from jsonfield import JSONField
+import jsonschema
 import pytz
 import rdflib
 import ujson as json
@@ -21,6 +22,7 @@ from .registry import ResourceTypeDefinition, get_resource_types, get_resource_t
 from .registry import get_source_type
 from .conf import is_spatial_backend
 from .data import Data
+from . import changeset
 
 if is_spatial_backend:
     from django.contrib.gis.db import models
@@ -359,8 +361,8 @@ class Source(models.Model, StaleFieldsMixin):
     resource = models.ForeignKey(Resource)
     type = models.ForeignKey(SourceType)
 
-    author = models.ForeignKey(User, related_name='author_of')
-    committer = models.ForeignKey(User, related_name='committer_of')
+    author = models.ForeignKey(User, related_name='author_of_source')
+    committer = models.ForeignKey(User, related_name='committer_of_source')
 
     created = models.DateTimeField(auto_now_add=True)
     modified = models.DateTimeField(auto_now=True)
@@ -470,3 +472,57 @@ class Identifier(models.Model, StaleFieldsMixin):
     def delete(self, *args, **kwargs):
         signals.identifier_removed.send(self)
         super(Identifier, self).delete(*args, **kwargs)
+
+CHANGESET_STATE_CHOICES = (
+    ('pending-approval', 'pending approval'),
+    ('scheduled', 'scheduled'),
+    ('performed', 'performed'),
+    ('failed', 'failed'),
+)
+
+class Changeset(models.Model):
+    author = models.ForeignKey(User, related_name='author_of_changeset')
+    committer = models.ForeignKey(User, null=True, blank=True, related_name='committer_of_changeset')
+    version = models.PositiveIntegerField(default=0)
+
+    base_url = models.TextField()
+    perform_at = models.DateTimeField(null=True, blank=True)
+    performed = models.DateTimeField(null=True, blank=True)
+    state = models.CharField(max_length=30, choices=CHANGESET_STATE_CHOICES) 
+
+    data = JSONField()
+    description = models.TextField(blank=True)
+
+    def save(self, *args, **kwargs):
+        try:
+            jsonschema.validate(self.data, changeset.schema)
+        except jsonschema.ValidationError as e:
+            raise exceptions.SchemaValidationError(e)
+        if 'performAt' in self.data:
+            self.scheduled = dateutil.parser.parse(self.data['performAt'])
+        else:
+            self.scheduled = None
+        self.description = self.data.get('description')
+        self.version += 1
+        return super(Changeset, self).save(*args, **kwargs)
+    
+    @transaction.atomic
+    def perform(self):
+        if self.pk:
+            try:
+                Changeset.objects.select_for_update().get(pk=self.pk, version=self.version)
+            except Changeset.DoesNotExist:
+                raise exceptions.ChangesetConflict
+        updater = changeset.SourceUpdater(self.base_url, self.author, self.committer)
+        try:
+            with transaction.atomic:
+                updater.perform_updates(self.data)
+        except Exception:
+            self.state = 'failed'
+            self.performed = now()
+            self.save()
+            raise
+        else:
+            self.state = 'performed'
+            self.performed = now()
+            self.save()

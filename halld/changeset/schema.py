@@ -1,6 +1,8 @@
 schema = {
     "type": "object",
     "properties": {
+        "performAt": {"type": "string", "format": "date-time"},
+        "description": {"type": "string"},
         "updates": {
             "type": "array",
             "items": {

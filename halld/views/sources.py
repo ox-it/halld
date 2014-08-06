@@ -15,7 +15,7 @@ from .mixins import JSONRequestMixin, VersioningMixin
 from .. import exceptions
 from ..models import Source, Resource
 from ..registry import get_resource_type, get_source_type
-from ..update_source import SourceUpdater
+from ..changeset import SourceUpdater
 
 __all__ = ['SourceListView', 'SourceDetailView']
 

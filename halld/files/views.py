@@ -16,7 +16,7 @@ from django_conneg.http import HttpResponseCreated
 from ..models import Resource
 import halld.exceptions
 from ..registry.resources import get_resource_type, get_source_type
-from ..update_source import SourceUpdater
+from ..changeset import SourceUpdater
 from .registry import FileResourceTypeDefinition, FileMetadataSourceTypeDefinition
 from . import conf
 from . import exceptions
