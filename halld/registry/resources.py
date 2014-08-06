@@ -3,6 +3,7 @@ from collections import defaultdict
 import copy
 import re
 import threading
+import urllib.parse
 import uuid
 import importlib
 
@@ -52,6 +53,13 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
         inferences.append(inference.Types())
         return inferences
 
+    def get_normalizations(self):
+        return [
+            self.normalize_links,
+            self.normalize_dates,
+            self.add_inbound_links,
+        ]
+
     def generate_identifier(self):
         return uuid.uuid4().hex
 
@@ -66,47 +74,26 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
     def get_contributed_types(self, resource, data):
         return self.contributed_types
 
-    def get_hal(self, user, resource, data, with_links=True):
+    def get_hal(self, user, resource, data):
         hal = copy.deepcopy(data)
-        links, embedded = defaultdict(list), defaultdict(list)
+        links, embedded = {}, {}
 
         link_types = get_link_types()
         for link_type in link_types.values():
-            hal.pop(link_type.name, None)
+            link_items = hal.pop(link_type.name, None)
+            if not link_items or not link_type.include:
+                continue
+            if link_type.functional:
+                link_items = link_items[0]
+            if link_type.embed:
+                embedded[link_type.name] = link_items
+            else:
+                links[link_type.name] = link_items
 
-        if with_links:
-            for link in self.get_links(resource):
-                if resource == link.active:
-                    other = link.passive
-                    link_type = link_types[link.type_id]
-                else:
-                    other = link.active
-                    link_type = link_types[link.type_id].inverse()
-                if not link_type.include:
-                    continue
-                add_to = embedded if link_type.embed and other else links
-                if link_type.embed and other:
-                    other_data = other.get_hal(other.filter_data(), with_links=False)
-                elif other:
-                    other_data = {'href': other.get_absolute_url(),
-                                  '@id': other.get_absolute_uri()}
-                else:
-                    other_data = {'href': link.target_href}
-                if link_type.functional:
-                    add_to[link_type.name] = other_data
-                else:
-                    add_to[link_type.name].append(other_data)
-
-            links['self'] = {'href': resource.get_absolute_url(),
-                             '@id': resource.uri}
-            hal['_links'] = dict(links)
-            if embedded:
-                hal['_embedded'] = dict(embedded)
+        hal['_meta'] = {'created': resource.created.isoformat(),
+                        'modified': resource.modified.isoformat(),
+                        'version': resource.version}
         return hal
-    
-    def get_link_data(self, data):
-        links = {n: data.get(n, ()) for n in get_link_types()}
-        return links
 
     def get_links(self, resource):
         from ..models import Link
@@ -125,8 +112,32 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
         return user.has_perm('halld.instantiate_resourcetype',
                              ResourceType.objects.get(name=self.name))
 
-    def filter_data(self, user, source, data):
+    def filter_data(self, user, resource, data):
         return data
+
+    def normalize_links(self, resource, data):
+        """
+        Makes sure that each link is a list of dicts, each with a href.
+        """
+        for link_type in get_link_types().values():
+            link_data = data.pop(link_type.name, None)
+            if not link_data:
+                continue
+            links = []
+            if not isinstance(link_data, list):
+                link_data = [link_data]
+            for link in link_data:
+                if isinstance(link, str):
+                    link = {'href': link}
+                link['href'] = urllib.parse.urljoin(resource.href, link['href'])
+                links.append(link)
+            data[link_type.name] = links
+
+    def normalize_dates(self, resource, data):
+        pass # TODO
+
+    def add_inbound_links(self, resource, data):
+        pass
 
 class DefaultFilteredResourceTypeDefinition(ResourceTypeDefinition):
     """

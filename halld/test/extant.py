@@ -18,45 +18,45 @@ class ExtantTestCase(TestCase):
 
     def testExtantFalse(self):
         r = Resource.objects.create(type_id='snake', identifier='python', creator=self.user)
-        r.raw_data = {'@id': 'http://testserver/id/snake/python',
-                      '@extant': False}
-        r.update_data()
+        r.data = {'@id': 'http://testserver/id/snake/python',
+                  '@extant': False}
+        r.update_denormalized_fields()
         self.assertEqual(r.extant, False)
 
     def testNotYetCurrent(self):
         r = Resource.objects.create(type_id='snake', identifier='python', creator=self.user)
-        r.raw_data = {'@id': 'http://testserver/id/snake/python',
-                      # This resource starts existing two days from now.
-                      '@startDate': (datetime.date.today() + datetime.timedelta(2)).isoformat()}
-        r.update_data()
+        r.data = {'@id': 'http://testserver/id/snake/python',
+                  # This resource starts existing two days from now.
+                  '@startDate': (datetime.date.today() + datetime.timedelta(2)).isoformat()}
+        r.update_denormalized_fields()
         self.assertEqual(r.extant, False)
 
     def testBeenAndGone(self):
         r = Resource.objects.create(type_id='snake', identifier='python', creator=self.user)
-        r.raw_data = {'@id': 'http://testserver/id/snake/python',
-                      # This resource stopped existing two days ago.
-                      '@endDate': (datetime.date.today() - datetime.timedelta(2)).isoformat()}
-        r.update_data()
+        r.data = {'@id': 'http://testserver/id/snake/python',
+                  # This resource stopped existing two days ago.
+                  '@endDate': (datetime.date.today() - datetime.timedelta(2)).isoformat()}
+        r.update_denormalized_fields()
         self.assertEqual(r.extant, False)
 
     @mock.patch('halld.signals.request_future_resource_generation')
     def testFutureExistenceSignal(self, request_future_resource_generation):
         r = Resource.objects.create(type_id='snake', identifier='python', creator=self.user)
         self.assertFalse(request_future_resource_generation.called)
-        r.regenerate = mock.Mock() # So that saving doesn't wipe out our hacked-in raw_data
-        r.raw_data = {'@id': 'http://testserver/id/snake/python',
-                      # This resource starts existing two days from now.
-                      '@startDate': (datetime.date.today() + datetime.timedelta(2)).isoformat()}
+        r.generate_data = mock.Mock()
+        r.generate_data.return_value = {'@id': 'http://testserver/id/snake/python',
+                                        # This resource starts existing two days from now.
+                                        '@startDate': (datetime.date.today() + datetime.timedelta(2)).isoformat()}
         r.save()
-        self.assertEqual(r.regenerate.call_count, 1)
+        self.assertEqual(r.generate_data.call_count, 1)
         request_future_resource_generation.send.assert_called_once_with(r, when=r.start_date)
 
     def testNoIdentifiersForNonExtantResources(self):
         r = Resource.objects.create(type_id='snake', identifier='python', creator=self.user)
-        r.regenerate = mock.Mock() # So that saving doesn't wipe out our hacked-in raw_data
-        r.raw_data = {'@id': 'http://testserver/id/snake/python',
-                      '@extant': False,
-                      'identifier': {'foo': 'bar'}}
+        r.generate_data = mock.Mock()
+        r.generate_data.return_value = {'@id': 'http://testserver/id/snake/python',
+                                        '@extant': False,
+                                        'identifier': {'foo': 'bar'}}
         r.save()
         self.assertEqual(Identifier.objects.filter(resource=r,
                                                    scheme='foo',
@@ -65,10 +65,10 @@ class ExtantTestCase(TestCase):
     def testNonExtantLink(self):
         anaconda = Resource.objects.create(type_id='snake', identifier='anaconda', creator=self.user)
         r = Resource.objects.create(type_id='snake', identifier='python', creator=self.user)
-        r.regenerate = mock.Mock() # So that saving doesn't wipe out our hacked-in raw_data
-        r.raw_data = {'@id': 'http://testserver/id/snake/python',
-                      '@extant': False,
-                      'eats': [anaconda.href]}
+        r.generate_data = mock.Mock()
+        r.generate_data.return_value = {'@id': 'http://testserver/id/snake/python',
+                                        '@extant': False,
+                                        'eats': [{'href': anaconda.href}]}
         r.save()
         self.assertFalse(r.extant)
         link = Link.objects.get(source=r, type_id='eats')
@@ -79,10 +79,10 @@ class ExtantTestCase(TestCase):
     def testExtantLink(self):
         anaconda = Resource.objects.create(type_id='snake', identifier='anaconda', creator=self.user)
         r = Resource.objects.create(type_id='snake', identifier='python', creator=self.user)
-        r.regenerate = mock.Mock() # So that saving doesn't wipe out our hacked-in raw_data
-        r.raw_data = {'@id': 'http://testserver/id/snake/python',
-                      '@extant': False,
-                      'timelessF': [anaconda.href]}
+        r.generate_data = mock.Mock()
+        r.generate_data.return_value = {'@id': 'http://testserver/id/snake/python',
+                                        '@extant': False,
+                                        'timelessF': [{'href': anaconda.href}]}
         r.save()
         link = Link.objects.get(source=r, type_id='timelessF')
         self.assertEqual(link.extant, True)

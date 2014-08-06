@@ -59,7 +59,6 @@ class Resource(models.Model, StaleFieldsMixin):
     identifier = models.SlugField()
     uri = models.CharField(max_length=MAX_HREF_LENGTH, db_index=True, blank=True)
 
-    raw_data = JSONField(default={}, blank=True)
     data = JSONField(default={}, blank=True)
 
     version = models.PositiveIntegerField(default=0)
@@ -81,24 +80,25 @@ class Resource(models.Model, StaleFieldsMixin):
     def get_etag(self):
         return hashlib.sha1("{}/{}".format(self.href, self.version).encode()).hexdigest()
 
-    def regenerate(self):
-        raw_data = Data()
-        raw_data['href'] = self.get_absolute_url()
-        raw_data['@source'] = {}
-        raw_data['identifier'] = {}
+    def generate_data(self):
+        data = Data()
+        data['href'] = self.get_absolute_url()
+        data['@source'], data['identifier'] = {}, {}
         for source in self.source_set.all():
-            raw_data['@source'][source.type_id] = copy.deepcopy(source.data)
-        self.collect_identifiers(raw_data)
+            data['@source'][source.type_id] = copy.deepcopy(source.data)
+        self.collect_identifiers(data)
         for inference in self.get_inferences():
-            inference(self, raw_data)
+            inference(self, data)
+        for normalization in self.get_normalizations():
+            normalization(self, data)
 
         if not self.get_type().allow_uri_override:
-            raw_data.pop('@id', None)
-        if not raw_data.get('@id'):
-            raw_data['@id'] = self.get_absolute_uri(raw_data)
-        del raw_data['@source']
-                                   
-        self.raw_data = copy.deepcopy(raw_data)
+            data.pop('@id', None)
+        if not data.get('@id'):
+            data['@id'] = self.get_absolute_uri(data)
+        del data['@source']
+
+        return data
 
     def save(self, *args, **kwargs):
         created = not self.pk
@@ -107,28 +107,34 @@ class Resource(models.Model, StaleFieldsMixin):
         if created:
             super(Resource, self).save(*args, **kwargs)
         if kwargs.pop('regenerate', True) is not False:
-            self.regenerate()
-        regenerated = {self} | kwargs.pop('regenerated', set())
-        if 'raw_data' in self.stale_fields:
-            cascade_to = self.update_data()
-            cascade_to -= regenerated
+            data = self.generate_data()
+        regenerated = {self.href} | kwargs.pop('regenerated', set())
 
-        if 'data' in self.stale_fields or created:
-            changed_values = self.get_changed_values()
+        old_data = self.data
+        if data != old_data:
+            self.data = data
+
+            previous_linked_hrefs = self.get_link_hrefs(old_data)
+            new_linked_hrefs = self.get_link_hrefs(data)
+
+            cascade_to = (previous_linked_hrefs | new_linked_hrefs) - regenerated
+            regenerated |= cascade_to
+
+            self.update_denormalized_fields()
+            self.update_links()
+            self.update_identifiers()
+
             self.created = self.created or now()
             self.modified = now()
             self.version += 1
-            self.data['meta'] = {'created': self.created,
-                                 'modified': self.modified,
-                                 'version': self.version}
 
             super(Resource, self).save()
             if created:
                 signals.resource_created.send(self)
             else:
-                signals.resource_changed.send(self, old_data=changed_values['data'])
+                signals.resource_changed.send(self, old_data=old_data)
 
-            for resource in cascade_to:
+            for resource in Resource.objects.filter(href__in=cascade_to):
                 resource.save(regenerated=regenerated)
         elif self.is_stale:
             super(Resource, self).save()
@@ -138,42 +144,25 @@ class Resource(models.Model, StaleFieldsMixin):
                 signals.request_future_resource_generation.send(self, when=date)
                 break
 
-    def update_data(self):
-        self.update_denormalised_fields()
-
-        cascade_to = set()
-        cascade_to.update(l.target for l in Link.objects.filter(source=self).select_related('target') if l.target)
-        cascade_to.update(self.update_links(self.raw_data))
-        
-        self.update_identifiers(self.raw_data)
-
-        data = copy.deepcopy(self.raw_data)
-        data['@extant'] = self.extant
-        for link_type in get_link_types().values():
-            data.pop(link_type.name, None)
-        self.data = data
-
-        return cascade_to
-
-    def update_denormalised_fields(self):
-        self.uri = self.raw_data['@id']
-        self.deleted = bool(self.raw_data.get('@deleted', False))
-        self.extant = self.raw_data.get('@extant', True)
-        if '@startDate' in self.raw_data:
-            self.start_date = localize(self.raw_data['@startDate'])
+    def update_denormalized_fields(self):
+        self.uri = self.data['@id']
+        self.deleted = bool(self.data.get('@deleted', False))
+        self.extant = self.data.get('@extant', True)
+        if '@startDate' in self.data:
+            self.start_date = localize(self.data['@startDate'])
             if self.start_date > now():
                 self.extant = False
         else:
             self.start_date = None
-        if '@endDate' in self.raw_data:
-            self.end_date = localize(self.raw_data['@endDate'])
+        if '@endDate' in self.data:
+            self.end_date = localize(self.data['@endDate'])
             if self.end_date <= now():
                 self.extant = False
         else:
             self.end_date = None
         
         if is_spatial_backend:
-            point = self.raw_data.get('@point')
+            point = self.data.get('@point')
             if isinstance(point, dict):
                 try:
                     self.point = Point(point['lon'], point['lat'], point.get('ele'), srid=4326)
@@ -191,12 +180,14 @@ class Resource(models.Model, StaleFieldsMixin):
 
     def get_inferences(self):
         return self.get_type().get_inferences()
+    def get_normalizations(self):
+        return self.get_type().get_normalizations()
 
     def get_type(self):
         return get_resource_type(self.type_id)
 
-    def get_hal(self, user, data=None, with_links=True):
-        return self.get_type().get_hal(user, self, data or self.data, with_links=with_links)
+    def get_hal(self, user, data=None):
+        return self.get_type().get_hal(user, self, data or self.data)
 
     def get_jsonld(self, user, data):
         jsonld = self.get_hal(user, data)
@@ -204,20 +195,27 @@ class Resource(models.Model, StaleFieldsMixin):
         jsonld.update(jsonld.pop('_embedded', {}))
         return jsonld
 
-    def update_links(self, data):
+    def get_link_hrefs(self, data):
+        link_hrefs = set()
+        for link_type in get_link_types().values():
+            for link in data.get(link_type.name, ()):
+                link_hrefs.add(link['href'])
+        return link_hrefs
+
+    def update_links(self):
+        """
+        Maintains Link objects based on self.data.
+        """
         if not self.pk:
             super(Resource, self).save()
 
         link_data = set()
         hrefs = set()
-        for name, links in self.get_type().get_link_data(data).items():
-            if isinstance(links, str):
-                links = [links]
-            link_type = get_link_type(name)
+        for link_type in get_link_types().values():
+            links = self.data.get(link_type.name, ())
             for link in links:
-                if isinstance(link, str):
-                    link = {'href': link}
-                link['href'] = urljoin(self.href, link['href'])
+                if link.get('inbound'):
+                    continue
                 link_data.add((self.href,
                                link['href'],
                                link_type.name))
@@ -260,7 +258,6 @@ class Resource(models.Model, StaleFieldsMixin):
                                                                        and (target is None or target.extant))))
 
         targets.pop(self.href)
-        return targets.values()
 
     def collect_identifiers(self, data):
         identifiers = {}
@@ -276,9 +273,9 @@ class Resource(models.Model, StaleFieldsMixin):
         data['identifier'].update(identifiers)
         data['identifier']['uri'] = self.get_absolute_uri(data)
 
-    def update_identifiers(self, data):
+    def update_identifiers(self):
         if self.extant:
-            identifiers = data.get('identifier', {}).copy()
+            identifiers = self.data.get('identifier', {}).copy()
         else:
             identifiers = {}
         for current in Identifier.objects.filter(resource=self):

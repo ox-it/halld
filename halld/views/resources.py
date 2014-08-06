@@ -99,6 +99,8 @@ class ResourceDetailView(HALLDView):
         resource = context['resource']
         data = resource.filter_data(request.user, resource.data)
         hal = resource.get_hal(request.user, data)
+        if not hal.get('_links'):
+            hal['_links'] = {}
         for source in resource.source_set.all():
             if not request.user.has_perm('halld.view_source', source):
                 continue
