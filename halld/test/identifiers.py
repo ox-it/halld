@@ -2,15 +2,13 @@ import json
 import unittest
 import uuid
 
-from django.test import TestCase, RequestFactory
+from django.db import transaction
 
 from halld import exceptions, models, views
 
-class IdentifiersTestCase(TestCase):
-    def setUp(self):
-        self.factory = RequestFactory()
-        self.by_identifier_view = views.ByIdentifierView.as_view()
+from .base import TestCase
 
+class IdentifiersTestCase(TestCase):
     def testNotFound(self):
         query = {'scheme': 'thing',
                  'values': ['something']}
@@ -21,6 +19,7 @@ class IdentifiersTestCase(TestCase):
         response = self.by_identifier_view(request)
 
     @unittest.expectedFailure
+    @transaction.atomic # to contain the DB exception
     def testIdentifierCreatedForResourceType(self):
         identifier = uuid.uuid4().hex
         resource = models.Resource.objects.create(type_id='snake',

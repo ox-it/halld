@@ -4,43 +4,19 @@ import mock
 import uuid
 
 from django.contrib.auth.models import User
-from django.test import TestCase, RequestFactory
 
+from .base import TestCase
 from .. import exceptions, models, views
 
-class SourceTestCase(TestCase):
-    def setUp(self):
-        self.factory = RequestFactory()
-        self.user = User.objects.create_superuser(username='superuser',
-                                                  email='superuser@example.com',
-                                                  password='secret')
-        #self.source_type_view = views.SourceTypeView.as_view()
-        self.source_list_view = views.SourceListView.as_view()
-        self.source_view = views.SourceDetailView.as_view()
-        self.resource_detail_view = views.ResourceDetailView.as_view()
-        self.resource_list_view = views.ResourceListView.as_view()
-
-    def tearDown(self):
-        User.objects.all().delete()
-
-    def create_resource(self, source_type='science'):
-        request = self.factory.post('/snake')
-        request.user = self.user
-        response = self.resource_list_view(request, 'snake')
-        resource_href = response['Location']
-        identifier = resource_href.rsplit('/', 1)[1]
-        source_href = resource_href + '/source/science'
-        return response, source_href, identifier
-
-class SourceManipulationTestCase(SourceTestCase):
+class SourceManipulationTestCase(TestCase):
     def testGetUncreatedSource(self):
         request = self.factory.post('/snake')
-        request.user = self.user
+        request.user = self.superuser
         response = self.resource_list_view(request, 'snake')
         identifier = response['Location'].rsplit('/', 1)[1]
         
         request = self.factory.get('/snake/{}/source/science'.format(identifier))
-        request.user = self.user
+        request.user = self.superuser
         
         with self.assertRaises(exceptions.NoSuchSource):
             response = self.source_view(request, 'snake', identifier, 'science')
@@ -54,14 +30,14 @@ class SourceManipulationTestCase(SourceTestCase):
         request = self.factory.put('/snake/{}/source/science'.format(identifier),
                                    data=json.dumps({'title': title}),
                                    content_type='application/hal+json')
-        request.user = self.user
+        request.user = self.superuser
         self.source_view(request, 'snake', identifier, 'science')
 
         assert source_created.send.called
         self.assertTrue(models.Source.objects.filter(href=source_href).exists())
 
         request = self.factory.get('/snake/{}/source/science'.format(identifier))
-        request.user = self.user
+        request.user = self.superuser
         response = self.source_view(request, 'snake', identifier, 'science')
         
         self.assertEqual(response['Content-type'], 'application/hal+json')
@@ -79,12 +55,12 @@ class SourceManipulationTestCase(SourceTestCase):
         request = self.factory.put('/snake/{}/source/science'.format(identifier),
                                    data=json.dumps({}),
                                    content_type='application/hal+json')
-        request.user = self.user
+        request.user = self.superuser
         self.source_view(request, 'snake', identifier, 'science')
 
         # Delete it
         request = self.factory.delete('/snake/{}/source/science'.format(identifier))
-        request.user = self.user
+        request.user = self.superuser
         response = self.source_view(request, 'snake', identifier, 'science')
 
         assert source_deleted.send.called
@@ -92,7 +68,7 @@ class SourceManipulationTestCase(SourceTestCase):
 
         # Check it's gone
         request = self.factory.get('/snake/{}/source/science'.format(identifier))
-        request.user = self.user
+        request.user = self.superuser
         response = self.source_view(request, 'snake', identifier, 'science')
 
         self.assertEqual(response.status_code, http.client.GONE)
@@ -101,14 +77,14 @@ class SourceManipulationTestCase(SourceTestCase):
         request = self.factory.put('/snake/{}/source/science'.format(identifier),
                                    data=json.dumps({}),
                                    content_type='application/hal+json')
-        request.user = self.user
+        request.user = self.superuser
         response = self.source_view(request, 'snake', identifier, 'science')
         self.assertEqual(response.status_code, http.client.NO_CONTENT)
         assert source_created.send.called
 
         # And check it's there
         request = self.factory.get('/snake/{}/source/science'.format(identifier))
-        request.user = self.user
+        request.user = self.superuser
         response = self.source_view(request, 'snake', identifier, 'science')
         self.assertEqual(response.status_code, http.client.OK)
 
@@ -124,13 +100,13 @@ class SourceManipulationTestCase(SourceTestCase):
         request = self.factory.put('/snake/{}/source/science'.format(identifier),
                                    data=json.dumps({}),
                                    content_type='application/hal+json')
-        request.user = self.user
+        request.user = self.superuser
         self.source_view(request, 'snake', identifier, 'science')
 
         request = self.factory.put('/snake/{}/source/science'.format(identifier),
                                    data=json.dumps(None),
                                    content_type='application/hal+json')
-        request.user = self.user
+        request.user = self.superuser
         response = self.source_view(request, 'snake', identifier, 'science')
 
         assert source_deleted.send.called
@@ -152,7 +128,7 @@ class SourceManipulationTestCase(SourceTestCase):
             request = self.factory.put('/snake/{}/source/science'.format(identifier),
                                        data=json.dumps(data),
                                        content_type='application/hal+json')
-            request.user = self.user
+            request.user = self.superuser
 
             with self.assertRaises(exceptions.SchemaValidationError):
                 self.source_view(request, 'snake', identifier, 'science')
@@ -166,7 +142,7 @@ class SourceManipulationTestCase(SourceTestCase):
         request = self.factory.put('/snake/{}/source/science'.format(identifier),
                                    data=json.dumps({'foo': 'bar', 'baz': 'quux'}),
                                    content_type='application/hal+json')
-        request.user = self.user
+        request.user = self.superuser
         self.source_view(request, 'snake', identifier, 'science')
 
         # And PATCH it
@@ -177,7 +153,7 @@ class SourceManipulationTestCase(SourceTestCase):
         request = self.factory.patch('/snake/{}/source/science'.format(identifier),
                                    data=json.dumps(patch),
                                    content_type='application/patch+json')
-        request.user = self.user
+        request.user = self.superuser
         response = self.source_view(request, 'snake', identifier, 'science')
         assert source_changed.send.called
         self.assertEqual(response.status_code, http.client.NO_CONTENT)
@@ -186,12 +162,12 @@ class SourceManipulationTestCase(SourceTestCase):
         self.assertEqual(source.data, {'baz': 'xyzzy'})
         self.assertEqual(source.version, 2)
 
-class SourceListViewTestCase(SourceTestCase):
+class SourceListViewTestCase(TestCase):
     def testGetEmpty(self):
         _, source_href, identifier = self.create_resource()
 
         request = self.factory.get('/snake/{}/source'.format(identifier))
-        request.user = self.user
+        request.user = self.superuser
         response = self.source_list_view(request, 'snake', identifier)
         data = json.loads(response.content.decode())
         self.assertEqual(data, {'_embedded': {}})
@@ -204,11 +180,11 @@ class SourceListViewTestCase(SourceTestCase):
         request = self.factory.put('/snake/{}/source/science'.format(identifier),
                                    data=json.dumps(data),
                                    content_type='application/hal+json')
-        request.user = self.user
+        request.user = self.superuser
         self.source_view(request, 'snake', identifier, 'science')
 
         request = self.factory.get('/snake/{}/source'.format(identifier))
-        request.user = self.user
+        request.user = self.superuser
         response = self.source_list_view(request, 'snake', identifier)
         source_list = json.loads(response.content.decode())
         # We don't care about the metadata or links
@@ -227,7 +203,7 @@ class SourceListViewTestCase(SourceTestCase):
         request = self.factory.put('/snake/{}/source'.format(identifier),
                                    data=json.dumps(data),
                                    content_type='application/hal+json')
-        request.user = self.user
+        request.user = self.superuser
         response = self.source_list_view(request, 'snake', identifier)
         self.assertEqual(response.status_code, http.client.NO_CONTENT)
 
@@ -246,13 +222,13 @@ class SourceListViewTestCase(SourceTestCase):
         request = self.factory.put('/snake/{}/source/science'.format(identifier),
                                    data=json.dumps(data),
                                    content_type='application/hal+json')
-        request.user = self.user
+        request.user = self.superuser
         self.source_view(request, 'snake', identifier, 'science')
 
         request = self.factory.put('/snake/{}/source'.format(identifier),
                                    data=json.dumps({'_embedded': {'source:science': None}}),
                                    content_type='application/hal+json')
-        request.user = self.user
+        request.user = self.superuser
         response = self.source_list_view(request, 'snake', identifier)
         self.assertEqual(response.status_code, http.client.NO_CONTENT)
 
@@ -261,9 +237,9 @@ class SourceListViewTestCase(SourceTestCase):
         self.assertEqual(science_source.version, 2)
         self.assertEqual(science_source.deleted, True)
 
-class AtomicTestCase(SourceTestCase):
+class AtomicTestCase(TestCase):
     def testDuplicatedIdentifier(self):
-        resource = models.Resource.objects.create(type_id='snake', identifier='python', creator=self.user)
+        resource = models.Resource.objects.create(type_id='snake', identifier='python', creator=self.superuser)
         identifier = models.Identifier.objects.create(resource=resource, scheme='misc', value='bar')
 
         _, source_href, identifier = self.create_resource()
@@ -271,7 +247,7 @@ class AtomicTestCase(SourceTestCase):
         request = self.factory.put('/snake/{}/source/science'.format(identifier),
                                    data=json.dumps({'identifier': {'misc': 'bar'}}),
                                    content_type='application/hal+json')
-        request.user = self.user
+        request.user = self.superuser
         with self.assertRaises(exceptions.DuplicatedIdentifier):
             response = self.source_view(request, 'snake', identifier, 'science')
 

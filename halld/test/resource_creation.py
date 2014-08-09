@@ -2,28 +2,18 @@ import http.client
 import uuid
 
 from django.contrib.auth.models import User
-from django.test import TestCase, RequestFactory
 
 from halld import exceptions, models, views
 from halld.registry import get_resource_type
 from halld.test_site import registry
 
-class ResourceHALTestCase(TestCase):
-    def setUp(self):
-        self.factory = RequestFactory()
-        self.user = User.objects.create_superuser(username='superuser',
-                                                  email='superuser@example.com',
-                                                  password='secret')
-        self.resource_list_view = views.ResourceListView.as_view()
-        self.resource_detail_view = views.ResourceDetailView.as_view()
-        self.source_view = views.SourceDetailView.as_view()
+from .base import TestCase
 
-    def tearDown(self):
-        User.objects.all().delete()
+class ResourceHALTestCase(TestCase):
 
     def testGetSourceWithMissingResource(self):
         request = self.factory.get('/snake/python/source/science')
-        request.user = self.user
+        request.user = self.superuser
 
         with self.assertRaises(exceptions.SourceDataWithoutResource) as cm:
             self.source_view(request, 'snake', 'python', 'science')
@@ -34,7 +24,7 @@ class ResourceHALTestCase(TestCase):
     def testForbiddenIdentifierAssignment(self):
         identifier = uuid.uuid4().hex
         request = self.factory.post('/snake/{}'.format(identifier))
-        request.user = self.user
+        request.user = self.superuser
 
         with self.assertRaises(exceptions.CannotAssignIdentifier):
             self.resource_detail_view(request, 'snake', identifier)
@@ -42,7 +32,7 @@ class ResourceHALTestCase(TestCase):
     def testAllowedIdentifierAssignment(self):
         identifier = uuid.uuid4().hex
         request = self.factory.post('/penguin/{}'.format(identifier))
-        request.user = self.user
+        request.user = self.superuser
 
         try:
             response = self.resource_detail_view(request, 'penguin', identifier)
@@ -54,14 +44,14 @@ class ResourceHALTestCase(TestCase):
     def testInvalidIdentifierAssignment(self):
         # Default set-up requires identifiers be UUIDs
         request = self.factory.post('/snake/python')
-        request.user = self.user
+        request.user = self.superuser
 
         with self.assertRaises(exceptions.NotValidIdentifier):
             self.resource_detail_view(request, 'snake', 'python')
 
     def testCreateFromCollection(self):
         request = self.factory.post('/snake')
-        request.user = self.user
+        request.user = self.superuser
 
         response = self.resource_list_view(request, 'snake')
         self.checkResourceExists('snake', response)
@@ -79,7 +69,7 @@ class ResourceHALTestCase(TestCase):
             self.fail("Resource wasn't created")
         
         request = self.factory.get('/{}/{}'.format(resource_type.name, identifier))
-        request.user = self.user
+        request.user = self.superuser
 
         response = self.resource_detail_view(request, resource_type.name, identifier)
         self.assertEqual(response.status_code, http.client.OK)
