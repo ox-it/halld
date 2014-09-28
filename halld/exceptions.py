@@ -217,8 +217,15 @@ class ResourceAlreadyExists(HALLDException):
     description = "You're trying to create a resource that already exists."
     status_code = http.client.CONFLICT
     
-    def __init__(self, resource):
-        self.resource = resource
+    def __init__(self, resource_type, identifier):
+        self.resource_type = resource_type
+        self.identifier = identifier
+
+    def as_hal(self):
+        hal = super(ResourceAlreadyExists, self).as_hal()
+        hal['resource_type'] = self.resource_type.name
+        hal['identifier'] = self.identifier
+        return hal
 
 class MissingContentType(HALLDException):
     name = 'missing-content-type'
@@ -234,6 +241,14 @@ class UnsupportedContentType(HALLDException):
     name = 'unsupported-content-type'
     description = 'You supplied an unsupported Content-Type with your request.'
     status_code = http.client.BAD_REQUEST
+
+    def __init__(self, content_type):
+        self.content_type = content_type
+
+    def as_hal(self):
+        hal = super(UnsupportedContentType, self).as_hal()
+        hal['expectedContentType'] = self.content_type
+        return hal
 
 class UnsupportedRequestBodyEncoding(HALLDException):
     name = 'unsupported-request-body-encoding'
