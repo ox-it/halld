@@ -288,16 +288,16 @@ class Resource(models.Model, StaleFieldsMixin):
                 current.value = identifiers[current.scheme]
                 try:
                     current.save()
-                except IntegrityError:
-                    raise exceptions.DuplicatedIdentifier(current.scheme, current.value)
+                except IntegrityError as e:
+                    raise exceptions.DuplicatedIdentifier(current.scheme, current.value) from e
             del identifiers[current.scheme]
         for scheme, value in identifiers.items():
             try:
                 Identifier.objects.create(resource=self,
                                           scheme=scheme,
                                           value=value)
-            except IntegrityError:
-                raise exceptions.DuplicatedIdentifier(scheme, value)
+            except IntegrityError as e:
+                raise exceptions.DuplicatedIdentifier(scheme, value) from e
 
     def get_absolute_uri(self, data=None):
         data = data or self.data
@@ -337,7 +337,7 @@ class Resource(models.Model, StaleFieldsMixin):
                                            identifier=identifier,
                                            creator=creator)
         except IntegrityError as e:
-            raise exceptions.ResourceAlreadyExists(resource_type, identifier)
+            raise exceptions.ResourceAlreadyExists(resource_type, identifier) from e
 
     def __str__(self):
         if 'title' in self.data:
