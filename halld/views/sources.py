@@ -11,26 +11,20 @@ from django.http import HttpResponse, HttpResponseNotModified
 from django_conneg.http import HttpBadRequest, HttpGone
 from django_conneg.views import JSONView
 
-from .mixins import JSONRequestMixin, VersioningMixin
+from .mixins import VersioningMixin
 from .. import exceptions
 from ..models import Source, Resource, Changeset
 from ..registry import get_resource_type, get_source_type
-from halld.changeset import SourceUpdater
+from .changeset import ChangesetView
 
 __all__ = ['SourceListView', 'SourceDetailView']
 
-class SourceView(JSONView, JSONRequestMixin):
-    def get_new_changeset(self, data):
-        return Changeset(base_href=self.request.build_absolute_uri(),
-                         author=self.request.user,
-                         data=data)
-
-class BulkSourceUpdateView(SourceView):
+class BulkSourceUpdateView(ChangesetView):
     @method_decorator(login_required)
     def post(self):
         raise NotImplementedError
 
-class SourceListView(SourceView):
+class SourceListView(ChangesetView):
     def dispatch(self, request, resource_type, identifier, **kwargs):
         try:
             resource_type = get_resource_type(resource_type)
@@ -74,7 +68,7 @@ class SourceListView(SourceView):
         changeset.perform()
         return HttpResponse(status=http.client.NO_CONTENT)
 
-class SourceDetailView(VersioningMixin, SourceView):
+class SourceDetailView(VersioningMixin, ChangesetView):
     def get(self, request, resource_type, identifier, source_type, **kwargs):
         try:
             source = Source.objects.get(href=request.build_absolute_uri())
