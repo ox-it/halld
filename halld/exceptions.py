@@ -200,9 +200,16 @@ class DuplicatedIdentifier(HALLDException):
         hal = super(DuplicatedIdentifier, self).as_hal()
         hal['scheme'] = self.scheme
         hal['value'] = self.value
-        from .models import Identifier
-        hal['_links'] = {'resource': Identifier.objects.get(scheme=self.scheme,
-                                                            value=self.value).resource_id}
+        try:
+            from .models import Identifier
+            hal['_links'] = {'resource': Identifier.objects.get(scheme=self.scheme,
+                                                                value=self.value).resource_id}
+        except Identifier.DoesNotExist:
+            # User was likely uploading two things with the same identifier,
+            # as opposed to there already being something we knew about with
+            # the provided identifier. There's no way we're going to be able
+            # to work out the resource href for the thing it clased with.
+            pass
         return hal
 
 class ResourceAlreadyExists(HALLDException):
