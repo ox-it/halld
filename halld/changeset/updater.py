@@ -1,8 +1,11 @@
 import abc
 import collections
+import contextlib
+import functools
 import re
 from urllib.parse import urljoin
 
+from django.db import transaction
 import jsonschema
 
 from .schema import schema
@@ -22,10 +25,26 @@ class SourceUpdater(object):
     source_href_re = re.compile(r'^(?P<source_href>(?P<resource_href>(?P<resource_type_href>.+)/(?P<identifier>[a-z\-\d]+))/source/(?P<source_type>[a-z\i\d:\-]+))$')
 
 
-    def __init__(self, base_href, author, committer=None):
+    def __init__(self, base_href, author, committer=None, multiple=False):
         self.base_href = base_href
         self.author = author
         self.committer = committer or author
+        self.multiple = multiple
+
+    @contextlib.contextmanager
+    def save_wrapper(self, errors, error_handling, with_transaction=None):
+        try:
+            if with_transaction != True and (with_transaction == False or error_handling == 'fail-first'):
+                yield
+            else:
+                with transaction.atomic():
+                    yield
+        except exceptions.HALLDException as error:
+            if not self.multiple:
+                raise
+            errors.append(error)
+            if error_handling == 'fail-first':
+                raise exceptions.MultipleErrors(errors)
 
     def perform_updates(self, data):
         """
@@ -34,6 +53,9 @@ class SourceUpdater(object):
         from ..models import Resource, Source
 
         updates = data['updates']
+        error_handling = data.get('error-handling', "fail-first")
+        errors = []
+        save_wrapper = functools.partial(self.save_wrapper, errors, error_handling)
 
         bad_hrefs = set()
         for update in updates:
@@ -70,17 +92,23 @@ class SourceUpdater(object):
         for update in updates:
             try:
                 method = self.methods[update['method']].from_json(update)
-            except KeyError:
-                raise exceptions.MethodNotAllowed(update['method'], bad_request=True)
+            except KeyError as e:
+                raise exceptions.MethodNotAllowed(update['method'], bad_request=True) from e
             try:
                 source = sources[update['href']]
-            except KeyError:
+            except KeyError as e:
                 # No need to create sources that would be deleted anyway
                 if method.will_delete:
                     continue
                 if method.require_source_exists:
-                    raise exceptions.NoSuchSource(update['href'])
-                source = Source(resource=resources[update['resourceHref']],
+                    raise exceptions.NoSuchSource(update['href']) from e
+                resource = resources[update['resourceHref']]
+                if update['sourceType'] not in resource.get_type().source_types:
+                    with save_wrapper(with_transaction=False):
+                        raise exceptions.IncompatibleSourceType(resource.type_id,
+                                                                update['sourceType']) from e
+                    continue
+                source = Source(resource=resource,
                                 type_id=update['sourceType'])
                 sources[update['href']] = source
             result = method(self.author, self.committer, source)
@@ -91,8 +119,16 @@ class SourceUpdater(object):
             results[result].add(source)
 
         for source in modified:
-            source.save(cascade_to_resource=False)
+            with save_wrapper():
+                source.save(cascade_to_resource=False)
 
         modified_resources = set(source.resource for source in modified)
         for modified_resource in modified_resources:
-            modified_resource.save()
+            with save_wrapper():
+                modified_resource.save()
+
+        if errors:
+            if self.error_handling == 'ignore':
+                raise exceptions.MultipleErrors(errors)
+            else:
+                return exceptions.MultipleErrors(errors)

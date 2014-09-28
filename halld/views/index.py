@@ -25,6 +25,7 @@ class IndexView(HALLDView, HTMLView):
                            'templated': True},
             'findByIdentifier': {'href': reverse('halld:by-identifier')},
             'graph': {'href': reverse('halld:graph')},
+            'changeset': {'href': reverse('halld:changeset-list')},
         })
         hal['_links'].update({
             'items:{}'.format(resource_type.name): {

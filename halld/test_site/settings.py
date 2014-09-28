@@ -30,6 +30,7 @@ SOURCE_TYPES = [
     'halld.files.metadata.ImageMetadataSourceTypeDefinition',
     SourceTypeDefinition.new('science'),
     SourceTypeDefinition.new('mythology'),
+    SourceTypeDefinition.new('conjecture'),
 ]
 
 BASE_URL = 'http://testserver/'

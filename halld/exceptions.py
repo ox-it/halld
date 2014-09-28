@@ -107,9 +107,11 @@ class SchemaValidationError(SourceValidationError):
     status_code = http.client.BAD_REQUEST
 
     def __init__(self, e):
+        self.__cause__ = e
         self.message = e.message
         self.path = jsonpointer.JsonPointer.from_parts(e.path).path,
         self.schema_path = jsonpointer.JsonPointer.from_parts(e.schema_path).path
+        self.schema = e.schema
 
     def as_hal(self):
         hal = super(SourceValidationError, self).as_hal()
@@ -119,6 +121,8 @@ class SchemaValidationError(SourceValidationError):
             hal['path'] = self.path
         if self.schema_path is not None:
             hal['schemaPath'] = self.schema_path
+        if self.schema is not None:
+            hal['schema'] = self.schema
         return hal
 
 class SourceDataWithoutResource(HALLDException):
@@ -280,3 +284,15 @@ class Forbidden(HALLDException):
             self.description = 'You need to authenticate to do that.'
             self.status_code = http.client.UNAUTHORIZED
 
+class MultipleErrors(HALLDException):
+    name = 'multiple-errors'
+    description = 'One or more errors occurred processing your request. See inside for more details.'
+    status_code = http.client.BAD_REQUEST
+
+    def __init__(self, errors):
+        self.errors = errors
+
+    def as_hal(self):
+        hal = super(MultipleErrors, self).as_hal()
+        hal['_embedded'] = {'error': [error.as_hal() for error in self.errors]}
+        return hal

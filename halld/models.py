@@ -503,7 +503,7 @@ class Changeset(models.Model):
         return super(Changeset, self).save(*args, **kwargs)
     
     @transaction.atomic
-    def perform(self):
+    def perform(self, multiple=False):
         if self.state in ('pending-approval', 'performed', 'failed'):
             return
         try:
@@ -513,9 +513,9 @@ class Changeset(models.Model):
         if self.pk:
             try:
                 Changeset.objects.select_for_update().get(pk=self.pk, version=self.version)
-            except Changeset.DoesNotExist:
-                raise exceptions.ChangesetConflict
-        updater = changeset.SourceUpdater(self.base_href, self.author, self.committer)
+            except Changeset.DoesNotExist as e:
+                raise exceptions.ChangesetConflict() from e
+        updater = changeset.SourceUpdater(self.base_href, self.author, self.committer, multiple=multiple)
         try:
             with transaction.atomic():
                 updater.perform_updates(self.data)

@@ -29,7 +29,7 @@ class JSONRequestMixin(View):
         except KeyError:
             raise exceptions.MissingContentType()
         if content_type != media_type:
-            raise exceptions.UnsupportedContentType()
+            raise exceptions.UnsupportedContentType(media_type)
         charset = options.get('charset', 'utf-8')
         try:
             reader = codecs.getreader(charset)

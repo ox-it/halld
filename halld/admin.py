@@ -17,6 +17,9 @@ class LinkAdmin(admin.ModelAdmin):
 class SourceAdmin(admin.ModelAdmin):
     list_display = ['resource', 'type', 'author', 'committer', 'version', 'deleted']
 
+class ChangesetAdmin(admin.ModelAdmin):
+    pass
+
 admin.site.register(models.ResourceType)
 admin.site.register(models.Resource, ResourceAdmin)
 admin.site.register(models.LinkType)
@@ -24,3 +27,4 @@ admin.site.register(models.Link, LinkAdmin)
 admin.site.register(models.SourceType)
 admin.site.register(models.Source, SourceAdmin)
 admin.site.register(models.Identifier, IdentifierAdmin)
+admin.site.register(models.Changeset, ChangesetAdmin)

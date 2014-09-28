@@ -57,7 +57,7 @@ class PutUpdate(Update):
             source.deleted = False
             data = source.filter_data(author, source.data)
             patch = jsonpatch.make_patch(data, self.data)
-            patch_update = PatchUpdate(patch)
+            patch_update = PatchUpdate(patch, True)
             try:
                 result = patch_update(author, committer, source)
             except Exception:
@@ -69,18 +69,24 @@ class PutUpdate(Update):
                 return result
 
 class PatchUpdate(Update):
-    def __init__(self, patch):
+    require_source_exists = False
+
+    def __init__(self, patch, create_empty_if_missing=False):
         self.patch = patch
+        self.create_empty_if_missing = create_empty_if_missing
 
     @classmethod
     def from_json(cls, data):
-        return cls(data['patch'])
+        return cls(data['patch'], data.get('createEmptyIfMissing', False))
 
     def __call__(self, author, committer, source):
         if not committer.has_perm('halld.change_source', source):
             raise exceptions.Forbidden(committer)
         if not self.patch:
             return
+        if not self.create_empty_if_missing and not source.pk:
+            print(self.patch)
+            raise exceptions.NoSuchSource(source.href)
         if source.deleted:
             raise exceptions.CantPatchDeletedSource
 

@@ -25,14 +25,16 @@ class SourceManipulationTestCase(TestCase):
     def testCreateSingleSource(self, source_created):
         title = 'Python'
         
-        _, source_href, identifier = self.create_resource()
+        _, identifier = self.create_resource()
+        source_href = 'http://testserver/snake/{}/source/science'.format(identifier)
         
-        request = self.factory.put('/snake/{}/source/science'.format(identifier),
+        request = self.factory.put(source_href,
                                    data=json.dumps({'title': title}),
                                    content_type='application/hal+json')
         request.user = self.superuser
-        self.source_view(request, 'snake', identifier, 'science')
+        response = self.source_view(request, 'snake', identifier, 'science')
 
+        self.assertEqual(response.status_code, http.client.NO_CONTENT)
         assert source_created.send.called
         self.assertTrue(models.Source.objects.filter(href=source_href).exists())
 
@@ -49,7 +51,7 @@ class SourceManipulationTestCase(TestCase):
     @mock.patch('halld.signals.source_created')
     @mock.patch('halld.signals.source_deleted')
     def testDeleteAndResurrectSource(self, source_deleted, source_created):
-        _, source_href, identifier = self.create_resource()
+        _, identifier = self.create_resource()
 
         # Create a source
         request = self.factory.put('/snake/{}/source/science'.format(identifier),
@@ -94,7 +96,7 @@ class SourceManipulationTestCase(TestCase):
 
     @mock.patch('halld.signals.source_deleted')
     def testDeleteWithNull(self, source_deleted):
-        _, source_href, identifier = self.create_resource()
+        _, identifier = self.create_resource()
 
         # Create a source
         request = self.factory.put('/snake/{}/source/science'.format(identifier),
@@ -114,7 +116,7 @@ class SourceManipulationTestCase(TestCase):
 
     @mock.patch('halld.signals.source_created')
     def testPuttingNonDicts(self, source_created):
-        _, source_href, identifier = self.create_resource()
+        _, identifier = self.create_resource()
 
         bad_data = (
             ['cat'],
@@ -136,7 +138,7 @@ class SourceManipulationTestCase(TestCase):
 
     @mock.patch('halld.signals.source_changed')
     def testPatch(self, source_changed):
-        _, source_href, identifier = self.create_resource()
+        _, identifier = self.create_resource()
 
         # Create a source
         request = self.factory.put('/snake/{}/source/science'.format(identifier),
@@ -164,7 +166,7 @@ class SourceManipulationTestCase(TestCase):
 
 class SourceListViewTestCase(TestCase):
     def testGetEmpty(self):
-        _, source_href, identifier = self.create_resource()
+        _, identifier = self.create_resource()
 
         request = self.factory.get('/snake/{}/source'.format(identifier))
         request.user = self.superuser
@@ -173,7 +175,7 @@ class SourceListViewTestCase(TestCase):
         self.assertEqual(data, {'_embedded': {}})
 
     def testGetWithOne(self):
-        _, source_href, identifier = self.create_resource()
+        _, identifier = self.create_resource()
 
         data = {'foo': 'bar', 'baz': 'quux'}
         # Create a source
@@ -193,7 +195,7 @@ class SourceListViewTestCase(TestCase):
         self.assertEqual(source_list, {'_embedded': {'source:science': data}})
 
     def testPutMultiple(self):
-        _, source_href, identifier = self.create_resource()
+        _, identifier = self.create_resource()
 
         science_data = {'foo': 'bar'}
         mythology_data = {'baz': 'quux'}
@@ -216,7 +218,7 @@ class SourceListViewTestCase(TestCase):
         self.assertEqual(mythology_source.version, 1)
 
     def testDelete(self):
-        _, source_href, identifier = self.create_resource()
+        _, identifier = self.create_resource()
 
         data = {'foo': 'bar'}
         request = self.factory.put('/snake/{}/source/science'.format(identifier),
@@ -242,7 +244,7 @@ class AtomicTestCase(TestCase):
         resource = models.Resource.objects.create(type_id='snake', identifier='python', creator=self.superuser)
         identifier = models.Identifier.objects.create(resource=resource, scheme='misc', value='bar')
 
-        _, source_href, identifier = self.create_resource()
+        _, identifier = self.create_resource()
 
         request = self.factory.put('/snake/{}/source/science'.format(identifier),
                                    data=json.dumps({'identifier': {'misc': 'bar'}}),
