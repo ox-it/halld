@@ -70,9 +70,9 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
     def get_identifiers(self, resource, data):
         return {}
 
-    contributed_types = frozenset()
-    def get_contributed_types(self, resource, data):
-        return self.contributed_types
+    contributed_tags = frozenset()
+    def get_contributed_tags(self, resource, data):
+        return self.contributed_tags
 
     def get_hal(self, user, resource, data):
         hal = copy.deepcopy(data)

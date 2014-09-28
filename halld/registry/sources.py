@@ -13,9 +13,9 @@ class SourceTypeDefinition(object, metaclass=abc.ABCMeta):
     def name(self):
         pass
 
-    contributed_types = frozenset()
-    def get_contributed_types(self, source, data):
-        return self.contributed_types
+    contributed_tags = frozenset()
+    def get_contributed_tags(self, source, data):
+        return self.contributed_tags
 
     @classmethod
     def new(cls, name, contributed_types=frozenset()):

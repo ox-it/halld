@@ -13,13 +13,13 @@ class Inference(metaclass=abc.ABCMeta):
     def __call__(self, resource, hal):
         pass
 
-class Types(Inference):
+class Tags(Inference):
     def __call__(self, resource, data):
-        types = resource.get_type().get_contributed_types(resource, data)
+        tags = resource.get_type().get_contributed_tags(resource, data)
         for source in resource.source_set.all():
             if not source.deleted:
-                types |= source.get_type().get_contributed_types(source, source.data)
-        data['@type'] = list(types)
+                tags |= source.get_type().get_contributed_tags(source, source.data)
+        data['tags'] = list(tags)
         return data
 
 class FromPointers(Inference):
