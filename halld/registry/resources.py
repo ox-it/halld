@@ -49,8 +49,6 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
             for source_type in self.source_types:
                 source_type = get_source_type(source_type)
                 inferences.extend(source_type.get_inferences())
-        from .. import inference
-        inferences.append(inference.Tags())
         return inferences
 
     def get_normalizations(self):
