@@ -87,6 +87,10 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
                 embedded[link_type.name] = link_items
             else:
                 links[link_type.name] = link_items
+        if links:
+            hal['_links'] = links
+        if embedded:
+            hal['_embedded'] = embedded
 
         hal['_meta'] = {'created': resource.created.isoformat(),
                         'modified': resource.modified.isoformat(),
