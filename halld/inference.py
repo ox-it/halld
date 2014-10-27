@@ -19,7 +19,7 @@ class Tags(Inference):
         for source in resource.source_set.all():
             if not source.deleted:
                 tags |= source.get_type().get_contributed_tags(source, source.data)
-        data['tags'] = list(tags)
+        data['tags'] = list(tags | set(data.get('tags', ())))
         return data
 
 class FromPointers(Inference):
