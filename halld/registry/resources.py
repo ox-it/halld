@@ -1,5 +1,4 @@
 import abc
-from collections import defaultdict
 import copy
 import re
 import threading
@@ -7,7 +6,7 @@ import urllib.parse
 import uuid
 import importlib
 
-from .links import get_link_types
+from .links import get_link_type, get_link_types
 from .sources import get_source_type
 
 uuid_re = re.compile('^[0-9a-f]{32}$')
@@ -139,7 +138,17 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
         pass # TODO
 
     def add_inbound_links(self, resource, data):
-        pass
+        from ..models import Link
+        for link in Link.objects.filter(target_href=resource.href):
+            link_type = get_link_type(link.type_id).inverse()
+            link_dict = {'href': link.source_id,
+                         'inbound': True}
+            if link_type.functional:
+                data[link_type.name] = link_dict
+            elif link_type.name in data:
+                data[link_type.name].append(link_dict)
+            else:
+                data[link_type.name] = [link_dict]
 
 class DefaultFilteredResourceTypeDefinition(ResourceTypeDefinition):
     """
