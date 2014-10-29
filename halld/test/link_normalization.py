@@ -28,15 +28,15 @@ class LinkNormalizationTestCase(TestCase):
         cobra.save()
 
         python = models.Resource(type_id='snake',
-                                 identifier='cobra',
+                                 identifier='python',
                                  creator=self.superuser)
         python.generate_data = mock.Mock()
-        python.generate_data.return_value = {'eats': '/snake/cobra',
+        python.generate_data.return_value = {'eats': [{'href': 'http://testserver/snake/cobra'}],
                                             '@id': 'http://testserver/id/snake/python'}
         python.save()
 
         cobra = models.Resource.objects.get(identifier='cobra')
-        self.assertEqual(cobra.data['eatenBy'],
+        self.assertEqual(cobra.data.get('eatenBy'),
                          [{'href': python.href,
                            'inbound': True}])
 
