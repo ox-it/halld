@@ -53,8 +53,8 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
     def get_normalizations(self):
         return [
             self.normalize_links,
-            self.normalize_dates,
             self.add_inbound_links,
+            self.normalize_dates,
         ]
 
     def generate_identifier(self):
