@@ -52,31 +52,3 @@ class ExtantTestCase(TestCase):
         self.assertEqual(Identifier.objects.filter(resource=r,
                                                    scheme='foo',
                                                    value='bar').count(), 0)
-
-    def testNonExtantLink(self):
-        anaconda = Resource.objects.create(type_id='snake', identifier='anaconda', creator=self.superuser)
-        r = Resource.objects.create(type_id='snake', identifier='python', creator=self.superuser)
-        r.generate_data = mock.Mock()
-        r.generate_data.return_value = {'@id': 'http://testserver/id/snake/python',
-                                        '@extant': False,
-                                        'eats': [{'href': anaconda.href}]}
-        r.save()
-        self.assertFalse(r.extant)
-        link = Link.objects.get(source=r, type_id='eats')
-        self.assertEqual(link.extant, False)
-        link = Link.objects.get(source=r, type_id='eatenBy')
-        self.assertEqual(link.extant, False)
-
-    def testExtantLink(self):
-        anaconda = Resource.objects.create(type_id='snake', identifier='anaconda', creator=self.superuser)
-        r = Resource.objects.create(type_id='snake', identifier='python', creator=self.superuser)
-        r.generate_data = mock.Mock()
-        r.generate_data.return_value = {'@id': 'http://testserver/id/snake/python',
-                                        '@extant': False,
-                                        'timelessF': [{'href': anaconda.href}]}
-        r.save()
-        link = Link.objects.get(source=r, type_id='timelessF')
-        self.assertEqual(link.extant, True)
-        link = Link.objects.get(source=r, type_id='timelessR')
-        self.assertEqual(link.extant, True)
-
