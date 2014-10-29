@@ -38,3 +38,6 @@ BASE_URL = 'http://testserver/'
 ROOT_URLCONF = 'halld.test_site.urls'
 
 FILE_METADATA_USER = 'file-metadata'
+
+MIDDLEWARE_CLASSES = (
+)
