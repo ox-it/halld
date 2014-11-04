@@ -318,6 +318,7 @@ class Resource(models.Model, StaleFieldsMixin):
         index_together = [
             ['type', 'identifier'],
         ]
+        ordering = ('type', 'identifier')
 
 class SourceType(models.Model):
     name = models.SlugField(primary_key=True)
