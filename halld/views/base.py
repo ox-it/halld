@@ -9,6 +9,8 @@ from django_conneg.views import ContentNegotiatedView
 import rdflib
 from rdflib_jsonld.parser import to_rdf as parse_jsonld
 
+from ..util.resource_cache import ResourceCache
+
 def get_rdf_renderer(format, content_type, name, rdflib_serializer):
     def render(self, request, context, template_name):
         jsonld = self.jsonld_from_context(context)
@@ -22,6 +24,10 @@ def get_rdf_renderer(format, content_type, name, rdflib_serializer):
 class HALLDView(ContentNegotiatedView, metaclass=abc.ABCMeta):
     _default_format = 'hal'
     _include_renderer_details_in_context = False
+
+    def dispatch(self, request, *args, **kwargs):
+        self.resource_cache = ResourceCache(request.user)
+        return super(HALLDView, self).dispatch(request, *args, **kwargs)
 
     @renderer(format='jsonld', mimetypes=('application/ld+json',), name='JSON-LD')
     def render_jsonld(self, request, context, template_name):

@@ -8,6 +8,7 @@ import importlib
 
 from .links import get_link_type, get_link_types
 from .sources import get_source_type
+from .. import exceptions
 
 uuid_re = re.compile('^[0-9a-f]{32}$')
 
@@ -71,23 +72,36 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
     def get_contributed_tags(self, resource, data):
         return self.contributed_tags
 
-    def get_hal(self, user, resource, data):
+    def get_hal(self, user, resource, resource_cache, data, exclude_links=False):
         hal = copy.deepcopy(data)
         links, embedded = {}, {}
+        links['self'] = {'href': resource.href}
 
-        link_types = get_link_types()
-        for link_type in link_types.values():
-            link_items = hal.pop(link_type.name, None)
-            if not link_items or not link_type.include:
-                continue
-            if link_type.functional:
-                link_items = link_items[0]
-            if link_type.embed:
-                embedded[link_type.name] = link_items
-            else:
-                links[link_type.name] = link_items
-        if links:
-            hal['_links'] = links
+        if not exclude_links:
+            link_types = get_link_types()
+            for link_type in link_types.values():
+                if not link_type.include:
+                    continue
+                link_items = hal.pop(link_type.name, None)
+                if not link_items:
+                    continue
+                for link_item in link_items:
+                    try:
+                        other_hal = resource_cache.get_hal(link_item['href'], exclude_links=True)
+                    except exceptions.NoSuchResource:
+                        continue
+                    if link_type.embed:
+                        link_item.update(other_hal)
+                    elif 'title' in other_hal:
+                        link_item['title'] = other_hal['title']
+                if link_type.functional:
+                    print(link_items)
+                    link_items = link_items[0]
+                if link_type.embed:
+                    embedded[link_type.name] = link_items
+                else:
+                    links[link_type.name] = link_items
+        hal['_links'] = links
         if embedded:
             hal['_embedded'] = embedded
 
