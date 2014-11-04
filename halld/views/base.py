@@ -10,7 +10,7 @@ from django_conneg.views import ContentNegotiatedView
 import rdflib
 from rdflib_jsonld.parser import to_rdf as parse_jsonld
 
-from ..util.resource_cache import ResourceCache
+from ..util.cache import ObjectCache
 
 def get_rdf_renderer(format, content_type, name, rdflib_serializer):
     def render(self, request, context, template_name):
@@ -22,12 +22,12 @@ def get_rdf_renderer(format, content_type, name, rdflib_serializer):
     render.__name__ = 'render_{}'.format(format)
     return renderer(format=format, mimetypes=(content_type,), name=name)(render)
 
-class ResourceCacheView(View):
+class ObjectCacheView(View):
     def dispatch(self, request, *args, **kwargs):
-        self.resource_cache = ResourceCache(request.user)
-        return super(ResourceCacheView, self).dispatch(request, *args, **kwargs)
+        self.object_cache = ObjectCache(request.user)
+        return super(ObjectCacheView, self).dispatch(request, *args, **kwargs)
 
-class HALLDView(ContentNegotiatedView, ResourceCacheView, metaclass=abc.ABCMeta):
+class HALLDView(ContentNegotiatedView, ObjectCacheView, metaclass=abc.ABCMeta):
     _default_format = 'hal'
     _include_renderer_details_in_context = False
 

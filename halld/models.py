@@ -110,7 +110,7 @@ class Resource(models.Model, StaleFieldsMixin):
         if kwargs.pop('regenerate', True) is not False:
             data = self.generate_data()
         regenerated = {self.href} | kwargs.pop('regenerated', set())
-        resource_cache = kwargs.pop('resource_cache', None)
+        object_cache = kwargs.pop('object_cache', None)
 
         old_data = self.data
         if data != old_data:
@@ -136,13 +136,13 @@ class Resource(models.Model, StaleFieldsMixin):
             else:
                 signals.resource_changed.send(self, old_data=old_data)
 
-            if resource_cache:
-                cascade_resources = resource_cache.get_resources(cascade_to)
+            if object_cache:
+                cascade_resources = object_cache.resource.get_many(cascade_to)
             else:
                 cascade_resources = Resource.objects.filter(href__in=cascade_to)
             for resource in cascade_resources:
                 resource.save(regenerated=regenerated,
-                              resource_cache=resource_cache)
+                              object_cache=object_cache)
         elif self.is_stale:
             super(Resource, self).save()
 
@@ -193,8 +193,8 @@ class Resource(models.Model, StaleFieldsMixin):
     def get_type(self):
         return get_resource_type(self.type_id)
 
-    def get_hal(self, user, resource_cache, data=None, exclude_links=False):
-        return self.get_type().get_hal(user, self, resource_cache, data or self.data, exclude_links)
+    def get_hal(self, user, object_cache, data=None, exclude_links=False):
+        return self.get_type().get_hal(user, self, object_cache, data or self.data, exclude_links)
 
     def get_jsonld(self, user, data):
         jsonld = self.get_hal(user, data)
@@ -468,7 +468,7 @@ class Changeset(models.Model):
         return super(Changeset, self).save(*args, **kwargs)
     
     @transaction.atomic
-    def perform(self, multiple=False, resource_cache=None):
+    def perform(self, multiple=False, object_cache=None):
         from . import changeset # to avoid a circular import
 
         if self.state in ('pending-approval', 'performed', 'failed'):
@@ -483,7 +483,7 @@ class Changeset(models.Model):
             except Changeset.DoesNotExist as e:
                 raise exceptions.ChangesetConflict() from e
         updater = changeset.SourceUpdater(self.base_href, self.author, self.committer, multiple=multiple,
-                                          resource_cache=resource_cache)
+                                          object_cache=object_cache)
         try:
             with transaction.atomic():
                 updater.perform_updates(self.data)

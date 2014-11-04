@@ -11,8 +11,10 @@ import jsonschema
 from .schema import schema
 from . import methods
 from ..registry import get_source_types, get_source_type
-from ..util.resource_cache import ResourceCache
+from ..util.cache import ObjectCache
 from .. import exceptions
+
+logger = logging.getLogger(__name__)
 
 class SourceUpdater(object):
     schema = schema
@@ -27,12 +29,12 @@ class SourceUpdater(object):
 
 
     def __init__(self, base_href, author, committer=None, multiple=False,
-                 resource_cache=None):
+                 object_cache=None):
         self.base_href = base_href
         self.author = author
         self.committer = committer or author
         self.multiple = multiple
-        self.resource_cache = resource_cache or ResourceCache(self.committer)
+        self.object_cache = object_cache or ObjectCache(self.committer)
 
     @contextlib.contextmanager
     def save_wrapper(self, errors, error_handling, with_transaction=None):
@@ -82,7 +84,7 @@ class SourceUpdater(object):
         if missing_source_types:
             raise exceptions.NoSuchSourceType(missing_source_types)
 
-        resources = {r.href: r for r in self.resource_cache.get_resources(resource_hrefs, ignore_missing=True)}
+        resources = {r.href: r for r in self.object_cache.resource.get_many(resource_hrefs, ignore_missing=True)}
         missing_hrefs = resource_hrefs - set(resources)
         if missing_hrefs:
             raise exceptions.SourceDataWithoutResource(missing_hrefs)
@@ -128,7 +130,7 @@ class SourceUpdater(object):
         modified_resources = set(source.resource for source in modified)
         for modified_resource in modified_resources:
             with save_wrapper():
-                modified_resource.save()
+                modified_resource.save(object_cache=self.object_cache)
 
         if errors:
             if self.error_handling == 'ignore':

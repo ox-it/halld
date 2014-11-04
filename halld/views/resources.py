@@ -33,7 +33,7 @@ class ResourceListView(HALLDView):
         self.context['resource_type'] = resource_type
         self.context['paginator'] = paginator
         self.context['page'] = page = paginator.page(page_num)
-        self.resource_cache.add_resources(page.object_list)
+        self.object_cache.resource.add_many(page.object_list)
         return self.render()
 
     def hal_json_from_context(self, request, context):
@@ -79,7 +79,7 @@ class ResourceDetailView(HALLDView):
         return super(ResourceDetailView, self).dispatch(request, resource_type, identifier, href, **kwargs)
 
     def get(self, request, resource_type, identifier, href):
-        resource = self.resource_cache.get_resource(href)
+        resource = self.object_cache.resource.get(href)
         self.context['resource'] = resource
         self.context['resource_type'] = resource_type
         if resource.deleted:
@@ -99,7 +99,7 @@ class ResourceDetailView(HALLDView):
     def hal_json_from_context(self, request, context):
         resource = context['resource']
         data = resource.filter_data(request.user, resource.data)
-        hal = resource.get_hal(request.user, self.resource_cache, data)
+        hal = resource.get_hal(request.user, self.object_cache, data)
         if not hal.get('_links'):
             hal['_links'] = {}
         for source in resource.source_set.all():

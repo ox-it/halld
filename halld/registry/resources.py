@@ -74,7 +74,7 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
     def get_contributed_tags(self, resource, data):
         return self.contributed_tags
 
-    def get_hal(self, user, resource, resource_cache, data, exclude_links=False):
+    def get_hal(self, user, resource, object_cache, data, exclude_links=False):
         hal = copy.deepcopy(data)
         links, embedded = {}, {}
         links['self'] = {'href': resource.href}
@@ -90,7 +90,7 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
                     continue
                 for link_item in link_items:
                     try:
-                        other_hal = resource_cache.get_hal(link_item['href'], exclude_links=True)
+                        other_hal = object_cache.resource.get_hal(link_item['href'], exclude_links=True)
                     except (exceptions.NoSuchResource, PermissionDenied):
                         continue
                     if link_type.embed:
