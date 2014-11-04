@@ -1,5 +1,6 @@
 import http
 
+from django.contrib.auth.models import AnonymousUser
 from django.test import TestCase, RequestFactory
 
 from ..views import ResourceTypeListView, ResourceTypeDetailView
@@ -12,10 +13,12 @@ class ResourceTypeViewTestCase(TestCase):
 
     def testGetResourceTypeList(self):
         request = self.factory.get('/type')
+        request.user = AnonymousUser()
         response = self.resource_type_list_view(request)
         self.assertEqual(response.status_code, http.client.OK)
 
     def testGetResourceTypeDetail(self):
         request = self.factory.get('/type/snake')
+        request.user = AnonymousUser()
         response = self.resource_type_detail_view(request, 'snake')
         self.assertEqual(response.status_code, http.client.OK)

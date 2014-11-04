@@ -1,4 +1,4 @@
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User, AnonymousUser
 from django.test import RequestFactory, TestCase
 
 from .. import views
@@ -18,4 +18,5 @@ class ResourceTestCase(TestCase):
 
     def testGetResourceList(self):
         request = self.factory.get('/snake')
+        request.user = AnonymousUser()
         self.resource_list_view(request, 'snake')
