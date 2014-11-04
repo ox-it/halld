@@ -22,7 +22,6 @@ from .registry import ResourceTypeDefinition, get_resource_types, get_resource_t
 from .registry import get_source_type
 from .conf import is_spatial_backend
 from .data import Data
-from . import changeset
 
 if is_spatial_backend:
     from django.contrib.gis.db import models
@@ -111,6 +110,7 @@ class Resource(models.Model, StaleFieldsMixin):
         if kwargs.pop('regenerate', True) is not False:
             data = self.generate_data()
         regenerated = {self.href} | kwargs.pop('regenerated', set())
+        resource_cache = kwargs.pop('resource_cache', None)
 
         old_data = self.data
         if data != old_data:
@@ -136,8 +136,13 @@ class Resource(models.Model, StaleFieldsMixin):
             else:
                 signals.resource_changed.send(self, old_data=old_data)
 
-            for resource in Resource.objects.filter(href__in=cascade_to):
-                resource.save(regenerated=regenerated)
+            if resource_cache:
+                cascade_resources = resource_cache.get_resources(cascade_to)
+            else:
+                cascade_resources = Resource.objects.filter(href__in=cascade_to)
+            for resource in cascade_resources:
+                resource.save(regenerated=regenerated,
+                              resource_cache=resource_cache)
         elif self.is_stale:
             super(Resource, self).save()
 
@@ -462,7 +467,9 @@ class Changeset(models.Model):
         return super(Changeset, self).save(*args, **kwargs)
     
     @transaction.atomic
-    def perform(self, multiple=False):
+    def perform(self, multiple=False, resource_cache=None):
+        from . import changeset # to avoid a circular import
+
         if self.state in ('pending-approval', 'performed', 'failed'):
             return
         try:
@@ -474,7 +481,8 @@ class Changeset(models.Model):
                 Changeset.objects.select_for_update().get(pk=self.pk, version=self.version)
             except Changeset.DoesNotExist as e:
                 raise exceptions.ChangesetConflict() from e
-        updater = changeset.SourceUpdater(self.base_href, self.author, self.committer, multiple=multiple)
+        updater = changeset.SourceUpdater(self.base_href, self.author, self.committer, multiple=multiple,
+                                          resource_cache=resource_cache)
         try:
             with transaction.atomic():
                 updater.perform_updates(self.data)

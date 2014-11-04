@@ -4,6 +4,7 @@ import itertools
 
 from django.conf import settings
 from django.http import HttpResponse
+from django.views.generic.base import View
 from django_conneg.decorators import renderer
 from django_conneg.views import ContentNegotiatedView
 import rdflib
@@ -21,13 +22,14 @@ def get_rdf_renderer(format, content_type, name, rdflib_serializer):
     render.__name__ = 'render_{}'.format(format)
     return renderer(format=format, mimetypes=(content_type,), name=name)(render)
 
-class HALLDView(ContentNegotiatedView, metaclass=abc.ABCMeta):
-    _default_format = 'hal'
-    _include_renderer_details_in_context = False
-
+class ResourceCacheView(View):
     def dispatch(self, request, *args, **kwargs):
         self.resource_cache = ResourceCache(request.user)
-        return super(HALLDView, self).dispatch(request, *args, **kwargs)
+        return super(ResourceCacheView, self).dispatch(request, *args, **kwargs)
+
+class HALLDView(ContentNegotiatedView, ResourceCacheView, metaclass=abc.ABCMeta):
+    _default_format = 'hal'
+    _include_renderer_details_in_context = False
 
     @renderer(format='jsonld', mimetypes=('application/ld+json',), name='JSON-LD')
     def render_jsonld(self, request, context, template_name):

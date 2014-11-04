@@ -11,6 +11,7 @@ import jsonschema
 from .schema import schema
 from . import methods
 from ..registry import get_source_types, get_source_type
+from ..util.resource_cache import ResourceCache
 from .. import exceptions
 
 class SourceUpdater(object):
@@ -25,11 +26,13 @@ class SourceUpdater(object):
     source_href_re = re.compile(r'^(?P<source_href>(?P<resource_href>(?P<resource_type_href>.+)/(?P<identifier>[a-z\-\d]+))/source/(?P<source_type>[a-z\i\d:\-]+))$')
 
 
-    def __init__(self, base_href, author, committer=None, multiple=False):
+    def __init__(self, base_href, author, committer=None, multiple=False,
+                 resource_cache=None):
         self.base_href = base_href
         self.author = author
         self.committer = committer or author
         self.multiple = multiple
+        self.resource_cache = resource_cache or ResourceCache(self.committer)
 
     @contextlib.contextmanager
     def save_wrapper(self, errors, error_handling, with_transaction=None):
