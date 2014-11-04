@@ -10,16 +10,17 @@ class ResourceCache(object):
         self.user = user
         self.resources = {}
     
-    def get_resources(self, hrefs):
+    def get_resources(self, hrefs, ignore_missing=False):
         hrefs_to_fetch = set(hrefs) - set(self.resources)
-        resources = Resource.objects.filter(href__in=hrefs_to_fetch)
-        for resource in resources:
-            self.resources[resource.href] = resource
-            hrefs_to_fetch.remove(resource.href)
-        for href in hrefs_to_fetch:
-            self.resources[href] = None
+        if hrefs_to_fetch:
+            resources = Resource.objects.filter(href__in=hrefs_to_fetch)
+            for resource in resources:
+                self.resources[resource.href] = resource
+                hrefs_to_fetch.remove(resource.href)
+            for href in hrefs_to_fetch:
+                self.resources[href] = None
         missing_hrefs = [href for href in hrefs if not self.resources[href]]
-        if missing_hrefs:
+        if not ignore_missing and missing_hrefs:
             raise exceptions.NoSuchResource(missing_hrefs)
         return (self.resources[href] for href in hrefs)
 
