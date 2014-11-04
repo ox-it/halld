@@ -143,9 +143,7 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
             link_type = get_link_type(link.type_id).inverse()
             link_dict = {'href': link.source_id,
                          'inbound': True}
-            if link_type.functional:
-                data[link_type.name] = link_dict
-            elif link_type.name in data:
+            if link_type.name in data:
                 data[link_type.name].append(link_dict)
             else:
                 data[link_type.name] = [link_dict]
