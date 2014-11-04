@@ -32,11 +32,19 @@ class LinkNormalizationTestCase(TestCase):
                                  creator=self.superuser)
         python.generate_data = mock.Mock()
         python.generate_data.return_value = {'eats': [{'href': 'http://testserver/snake/cobra'}],
-                                            '@id': 'http://testserver/id/snake/python'}
+                                             'functional': [{'href': 'http://testserver/snake/cobra'}],
+                                             'inverseFunctional': [{'href': 'http://testserver/snake/cobra'}],
+                                             '@id': 'http://testserver/id/snake/python'}
         python.save()
 
         cobra = models.Resource.objects.get(identifier='cobra')
         self.assertEqual(cobra.data.get('eatenBy'),
+                         [{'href': python.href,
+                           'inbound': True}])
+        self.assertEqual(cobra.data.get('inverseFunctional'),
+                         [{'href': python.href,
+                           'inbound': True}])
+        self.assertEqual(cobra.data.get('functional'),
                          [{'href': python.href,
                            'inbound': True}])
 

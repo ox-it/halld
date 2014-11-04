@@ -23,7 +23,8 @@ from halld.registry import LinkTypeDefinition, SourceTypeDefinition
 
 LINK_TYPES = [
     LinkTypeDefinition.new('eats', 'eatenBy'),
-    LinkTypeDefinition.new('timelessF', 'timelessR', timeless=True)
+    LinkTypeDefinition.new('timelessF', 'timelessR', timeless=True),
+    LinkTypeDefinition.new('functional', 'inverseFunctional', functional=True),
 ]
 
 SOURCE_TYPES = [
