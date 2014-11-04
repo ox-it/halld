@@ -6,6 +6,8 @@ import urllib.parse
 import uuid
 import importlib
 
+from django.core.exceptions import PermissionDenied
+
 from .links import get_link_type, get_link_types
 from .sources import get_source_type
 from .. import exceptions
@@ -80,6 +82,7 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
         if not exclude_links:
             link_types = get_link_types()
             for link_type in link_types.values():
+                new_links = []
                 if not link_type.include:
                     continue
                 link_items = hal.pop(link_type.name, None)
@@ -88,15 +91,17 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
                 for link_item in link_items:
                     try:
                         other_hal = resource_cache.get_hal(link_item['href'], exclude_links=True)
-                    except exceptions.NoSuchResource:
+                    except (exceptions.NoSuchResource, PermissionDenied):
                         continue
                     if link_type.embed:
                         link_item.update(other_hal)
                     elif 'title' in other_hal:
                         link_item['title'] = other_hal['title']
+                    new_links.append(link_item)
+                if not new_links:
+                    continue
                 if link_type.functional:
-                    print(link_items)
-                    link_items = link_items[0]
+                    new_links = new_links[0]
                 if link_type.embed:
                     embedded[link_type.name] = link_items
                 else:
@@ -142,11 +147,14 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
             if not isinstance(link_data, list):
                 link_data = [link_data]
             for link in link_data:
+                if link is None:
+                    continue
                 if isinstance(link, str):
                     link = {'href': link}
                 link['href'] = urllib.parse.urljoin(resource.href, link['href'])
                 links.append(link)
-            data[link_type.name] = links
+            if links:
+                data[link_type.name] = links
 
     def normalize_dates(self, resource, data):
         pass # TODO
