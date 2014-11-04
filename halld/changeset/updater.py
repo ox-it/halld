@@ -53,7 +53,7 @@ class SourceUpdater(object):
         """
         Updates sources and fires events.
         """
-        from ..models import Resource, Source
+        from ..models import Source
 
         updates = data['updates']
         error_handling = data.get('error-handling', "fail-first")
@@ -82,7 +82,7 @@ class SourceUpdater(object):
         if missing_source_types:
             raise exceptions.NoSuchSourceType(missing_source_types)
 
-        resources = {r.href: r for r in Resource.objects.filter(href__in=resource_hrefs)}
+        resources = {r.href: r for r in self.resource_cache.get_resources(resource_hrefs, ignore_missing=True)}
         missing_hrefs = resource_hrefs - set(resources)
         if missing_hrefs:
             raise exceptions.SourceDataWithoutResource(missing_hrefs)
