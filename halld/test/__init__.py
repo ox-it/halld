@@ -1,6 +1,7 @@
 from .changeset import *
 from .extant import *
 from .files import *
+from .hal import *
 from .identifiers import *
 from .index import *
 from .inference import *
