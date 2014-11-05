@@ -19,7 +19,7 @@ class SourceManipulationTestCase(TestCase):
         request.user = self.superuser
         
         with self.assertRaises(exceptions.NoSuchSource):
-            response = self.source_view(request, 'snake', identifier, 'science')
+            response = self.source_detail_view(request, 'snake', identifier, 'science')
 
     @mock.patch('halld.signals.source_created')
     def testCreateSingleSource(self, source_created):
@@ -32,7 +32,7 @@ class SourceManipulationTestCase(TestCase):
                                    data=json.dumps({'title': title}),
                                    content_type='application/hal+json')
         request.user = self.superuser
-        response = self.source_view(request, 'snake', identifier, 'science')
+        response = self.source_detail_view(request, 'snake', identifier, 'science')
 
         self.assertEqual(response.status_code, http.client.NO_CONTENT)
         assert source_created.send.called
@@ -40,7 +40,7 @@ class SourceManipulationTestCase(TestCase):
 
         request = self.factory.get('/snake/{}/source/science'.format(identifier))
         request.user = self.superuser
-        response = self.source_view(request, 'snake', identifier, 'science')
+        response = self.source_detail_view(request, 'snake', identifier, 'science')
         
         self.assertEqual(response['Content-type'], 'application/hal+json')
         source_data = json.loads(response.content.decode())
@@ -58,12 +58,12 @@ class SourceManipulationTestCase(TestCase):
                                    data=json.dumps({}),
                                    content_type='application/hal+json')
         request.user = self.superuser
-        self.source_view(request, 'snake', identifier, 'science')
+        self.source_detail_view(request, 'snake', identifier, 'science')
 
         # Delete it
         request = self.factory.delete('/snake/{}/source/science'.format(identifier))
         request.user = self.superuser
-        response = self.source_view(request, 'snake', identifier, 'science')
+        response = self.source_detail_view(request, 'snake', identifier, 'science')
 
         assert source_deleted.send.called
         self.assertEqual(response.status_code, http.client.NO_CONTENT)
@@ -71,7 +71,7 @@ class SourceManipulationTestCase(TestCase):
         # Check it's gone
         request = self.factory.get('/snake/{}/source/science'.format(identifier))
         request.user = self.superuser
-        response = self.source_view(request, 'snake', identifier, 'science')
+        response = self.source_detail_view(request, 'snake', identifier, 'science')
 
         self.assertEqual(response.status_code, http.client.GONE)
 
@@ -80,14 +80,14 @@ class SourceManipulationTestCase(TestCase):
                                    data=json.dumps({}),
                                    content_type='application/hal+json')
         request.user = self.superuser
-        response = self.source_view(request, 'snake', identifier, 'science')
+        response = self.source_detail_view(request, 'snake', identifier, 'science')
         self.assertEqual(response.status_code, http.client.NO_CONTENT)
         assert source_created.send.called
 
         # And check it's there
         request = self.factory.get('/snake/{}/source/science'.format(identifier))
         request.user = self.superuser
-        response = self.source_view(request, 'snake', identifier, 'science')
+        response = self.source_detail_view(request, 'snake', identifier, 'science')
         self.assertEqual(response.status_code, http.client.OK)
 
         source_data = json.loads(response.content.decode())
@@ -103,13 +103,13 @@ class SourceManipulationTestCase(TestCase):
                                    data=json.dumps({}),
                                    content_type='application/hal+json')
         request.user = self.superuser
-        self.source_view(request, 'snake', identifier, 'science')
+        self.source_detail_view(request, 'snake', identifier, 'science')
 
         request = self.factory.put('/snake/{}/source/science'.format(identifier),
                                    data=json.dumps(None),
                                    content_type='application/hal+json')
         request.user = self.superuser
-        response = self.source_view(request, 'snake', identifier, 'science')
+        response = self.source_detail_view(request, 'snake', identifier, 'science')
 
         assert source_deleted.send.called
         self.assertEqual(response.status_code, http.client.NO_CONTENT)
@@ -133,7 +133,7 @@ class SourceManipulationTestCase(TestCase):
             request.user = self.superuser
 
             with self.assertRaises(exceptions.SchemaValidationError):
-                self.source_view(request, 'snake', identifier, 'science')
+                self.source_detail_view(request, 'snake', identifier, 'science')
             assert not source_created.called
 
     @mock.patch('halld.signals.source_changed')
@@ -145,7 +145,7 @@ class SourceManipulationTestCase(TestCase):
                                    data=json.dumps({'foo': 'bar', 'baz': 'quux'}),
                                    content_type='application/hal+json')
         request.user = self.superuser
-        self.source_view(request, 'snake', identifier, 'science')
+        self.source_detail_view(request, 'snake', identifier, 'science')
 
         # And PATCH it
         patch = [
@@ -156,7 +156,7 @@ class SourceManipulationTestCase(TestCase):
                                    data=json.dumps(patch),
                                    content_type='application/patch+json')
         request.user = self.superuser
-        response = self.source_view(request, 'snake', identifier, 'science')
+        response = self.source_detail_view(request, 'snake', identifier, 'science')
         assert source_changed.send.called
         self.assertEqual(response.status_code, http.client.NO_CONTENT)
 
@@ -183,7 +183,7 @@ class SourceListViewTestCase(TestCase):
                                    data=json.dumps(data),
                                    content_type='application/hal+json')
         request.user = self.superuser
-        self.source_view(request, 'snake', identifier, 'science')
+        self.source_detail_view(request, 'snake', identifier, 'science')
 
         request = self.factory.get('/snake/{}/source'.format(identifier))
         request.user = self.superuser
@@ -225,7 +225,7 @@ class SourceListViewTestCase(TestCase):
                                    data=json.dumps(data),
                                    content_type='application/hal+json')
         request.user = self.superuser
-        self.source_view(request, 'snake', identifier, 'science')
+        self.source_detail_view(request, 'snake', identifier, 'science')
 
         request = self.factory.put('/snake/{}/source'.format(identifier),
                                    data=json.dumps({'_embedded': {'source:science': None}}),
@@ -251,7 +251,7 @@ class AtomicTestCase(TestCase):
                                    content_type='application/hal+json')
         request.user = self.superuser
         with self.assertRaises(exceptions.DuplicatedIdentifier):
-            response = self.source_view(request, 'snake', identifier, 'science')
+            response = self.source_detail_view(request, 'snake', identifier, 'science')
 
         # Make sure the source wasn't saved.
         self.assertEqual(models.Source.objects.filter(resource__identifier=identifier).count(),

@@ -16,7 +16,7 @@ class ResourceHALTestCase(TestCase):
         request.user = self.superuser
 
         with self.assertRaises(exceptions.SourceDataWithoutResource) as cm:
-            self.source_view(request, 'snake', 'python', 'science')
+            self.source_detail_view(request, 'snake', 'python', 'science')
 
         self.assertEqual(set(cm.exception.hrefs),
                          {'http://testserver/snake/python'})

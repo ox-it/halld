@@ -15,7 +15,7 @@ class TestCase(django.test.TestCase):
         self.by_identifier_view = views.ByIdentifierView.as_view()
         #self.source_type_view = views.SourceTypeView.as_view()
         self.source_list_view = views.SourceListView.as_view()
-        self.source_view = views.SourceDetailView.as_view()
+        self.source_detail_view = views.SourceDetailView.as_view()
         self.resource_detail_view = views.ResourceDetailView.as_view()
         self.resource_list_view = views.ResourceListView.as_view()
 
