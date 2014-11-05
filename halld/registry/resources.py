@@ -57,6 +57,7 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
         return [
             self.normalize_links,
             self.add_inbound_links,
+            self.sort_links,
             self.normalize_dates,
         ]
 
@@ -169,6 +170,15 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
                 data[link_type.name].append(link_dict)
             else:
                 data[link_type.name] = [link_dict]
+
+    def sort_links(self, resource, data):
+        for link_type in get_link_types().values():
+            try:
+                links = data[link_type.name]
+            except KeyError:
+                continue
+            else:
+                links.sort(key=lambda link: link['href'])
 
 class DefaultFilteredResourceTypeDefinition(ResourceTypeDefinition):
     """
