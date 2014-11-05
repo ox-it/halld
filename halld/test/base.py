@@ -1,4 +1,4 @@
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User, AnonymousUser
 import django.test
 
 from ..models import Changeset, Link, Identifier, Source, Resource
@@ -10,6 +10,7 @@ class TestCase(django.test.TestCase):
         self.superuser = User.objects.create_superuser(username='superuser',
                                                        email='superuser@example.com',
                                                        password='secret')
+        self.anonymous_user = AnonymousUser
         self.changeset_list_view = views.ChangesetListView.as_view()
         self.index_view = views.IndexView.as_view()
         self.by_identifier_view = views.ByIdentifierView.as_view()

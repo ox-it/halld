@@ -29,3 +29,14 @@ class IdentifiersTestCase(TestCase):
         assert models.Identifier.objects.filter(scheme='snake',
                                                 value=identifier,
                                                 resource=resource).exists()
+
+class ByIdentifierViewTestCase(TestCase):
+    def testRetrieveSourceAllResources(self):
+        self.create_resource_and_source()
+        self.create_resource_and_source()
+        data = {'scheme': 'snake',
+                'allInScheme': True,
+                'includeSources': ['science']}
+        request = self.factory.post('/by-identifier', json.dumps(data), 'application/json')
+        request.user = self.anonymous_user
+        response = self.by_identifier_view(request)
