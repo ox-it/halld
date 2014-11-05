@@ -137,35 +137,33 @@ class SourceUpdater(object):
             with save_wrapper():
                 source.save(cascade_to_resource=False)
 
-        deferred_save_set = set()
+        save_set = set()
 
         resources_to_save = set(resources.values())
         for i in range(1, self.max_cascades + 1):
             logger.debug("Cascade %d: %d resources to save",
                              i, len(resources_to_save))
-            deferred_cascade_set = set()
+            cascade_set = set()
             for j, resource in enumerate(resources_to_save, 1):
                 if j % 100 == 0:
                     logger.debug("Regenerating resource %d of %d for user %s (%d cascades)",
                                  j, len(resources_to_save), self.committer.username,
-                                 len(deferred_cascade_set))
-                resource.save(object_cache=self.object_cache,
-                              deferred_save_set=deferred_save_set,
-                              deferred_cascade_set=deferred_cascade_set)
-            if not deferred_cascade_set:
+                                 len(cascade_set))
+                if resource.regenerate(cascade_set):
+                    save_set.add(resource)
+            if not cascade_set:
                 break
-            resources_to_save = set(self.object_cache.resource.get_many(deferred_cascade_set))
+            resources_to_save = set(self.object_cache.resource.get_many(cascade_set))
         else:
             logger.warning("Still %d resources to cascade to after %d cascades",
-                           len(deferred_cascade_set), self.max_cascades)
+                           len(cascade_set), self.max_cascades)
 
-        for i, resource in enumerate(deferred_save_set, 1):
+        for i, resource in enumerate(save_set, 1):
             if i % 100 == 0:
                 logger.debug("Saving resource %d of %d for user %s",
                              i, len(resources), self.committer.username)
             with save_wrapper():
-                resource.version += 1
-                super(models.Resource, resource).save(force_update=True)
+                resource.save(force_update=True)
 
         if errors:
             if self.error_handling == 'ignore':

@@ -34,12 +34,12 @@ class ExtantTestCase(TestCase):
     def testFutureExistenceSignal(self, request_future_resource_generation):
         r = Resource.objects.create(type_id='snake', identifier='python', creator=self.superuser)
         self.assertFalse(request_future_resource_generation.called)
-        r.generate_data = mock.Mock()
-        r.generate_data.return_value = {'@id': 'http://testserver/id/snake/python',
-                                        # This resource starts existing two days from now.
-                                        '@startDate': (datetime.date.today() + datetime.timedelta(2)).isoformat()}
+        r.collect_data = mock.Mock()
+        r.collect_data.return_value = {'@id': 'http://testserver/id/snake/python',
+                                       # This resource starts existing two days from now.
+                                       '@startDate': (datetime.date.today() + datetime.timedelta(2)).isoformat()}
         r.save()
-        self.assertEqual(r.generate_data.call_count, 1)
+        self.assertEqual(r.collect_data.call_count, 1)
         request_future_resource_generation.send.assert_called_once_with(r, when=r.start_date)
 
     def testNoIdentifiersForNonExtantResources(self):

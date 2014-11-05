@@ -30,11 +30,11 @@ class LinkNormalizationTestCase(TestCase):
         python = models.Resource(type_id='snake',
                                  identifier='python',
                                  creator=self.superuser)
-        python.generate_data = mock.Mock()
-        python.generate_data.return_value = {'eats': [{'href': 'http://testserver/snake/cobra'}],
-                                             'functional': [{'href': 'http://testserver/snake/cobra'}],
-                                             'inverseFunctional': [{'href': 'http://testserver/snake/cobra'}],
-                                             '@id': 'http://testserver/id/snake/python'}
+        python.collect_data = mock.Mock()
+        python.collect_data.return_value = {'eats': [{'href': 'http://testserver/snake/cobra'}],
+                                            'functional': [{'href': 'http://testserver/snake/cobra'}],
+                                            'inverseFunctional': [{'href': 'http://testserver/snake/cobra'}],
+                                            '@id': 'http://testserver/id/snake/python'}
         python.save()
 
         cobra = models.Resource.objects.get(identifier='cobra')
@@ -53,9 +53,9 @@ class LinkNormalizationTestCase(TestCase):
         cobra = models.Resource(type_id='snake',
                                 identifier='cobra',
                                 creator=self.superuser)
-        cobra.generate_data = mock.Mock()
-        cobra.generate_data.return_value = {'title': 'Cobra',
-                                            '@id': 'http://testserver/id/snake/python'}
+        cobra.collect_data = mock.Mock()
+        cobra.collect_data.return_value = {'title': 'Cobra',
+                                           '@id': 'http://testserver/id/snake/python'}
         cobra.save()
 
         python = models.Resource(type_id='snake',

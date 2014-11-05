@@ -87,7 +87,7 @@ class Resource(models.Model, StaleFieldsMixin):
             self._cached_source_set = self.source_set.all()
         return self._cached_source_set
 
-    def generate_data(self):
+    def collect_data(self):
         data = Data()
         data['href'] = self.get_absolute_url()
         data['@source'], data['identifier'] = {}, {}
@@ -104,81 +104,71 @@ class Resource(models.Model, StaleFieldsMixin):
         if not data.get('@id'):
             data['@id'] = self.get_absolute_uri(data)
         del data['@source']
-
         return data
+
+    def regenerate(self, cascade_set):
+        data = self.collect_data()
+        if data == self.data:
+            return False
+        old_data, self.data = self.data, data
+        self.update_denormalized_fields()
+        previous_linked_hrefs = self.get_link_hrefs(old_data)
+        new_linked_hrefs = self.get_link_hrefs(data)
+        cascade_set |= (previous_linked_hrefs | new_linked_hrefs)
+        return True
 
     def save(self, *args, **kwargs):
         """
         Save, with a fair bit of cleverness. Takes the following optional kwargs:
 
-        :param regenerated: A tuple of hrefs already regenerated. Will not try to regenerate them again.
+        :param regeneration_path: A tuple of hrefs already regenerated. Will
+            not try to regenerate them again.
         :param object_cache: An ObjectCache instance, which will be used to
             look up other Resource objects without hitting the database.
-        :param deferred_cascade_set: A set, which if provided will stop this
-            method cascading directly. Resource hrefs to cascade to will be
+        :param cascade_set: A set, which if provided will stop this method
+            cascading directly. Instead, resource hrefs to cascade to will be
             added to the set.
-        :param deferred_save_set: A set, which if present will stop this
-            method actually saving. Instead, it will add itself to this set,
-            and the caller is responsible for incrementing version and calling
-            super(Resource, self).save() later.
+        :param regenerate: A boolean, which if false will stop this resource
+            regenerating, on the assumption that it's been done already.
         """
         created = not self.pk
         if not self.href:
             self.href = self.get_type().base_url + self.identifier
-        if created:
-            super(Resource, self).save(*args, **kwargs)
-        if kwargs.pop('regenerate', True) is not False:
-            data = self.generate_data()
-        regenerated = (self.href,) + kwargs.pop('regenerated', ())
+
         object_cache = kwargs.pop('object_cache', None)
-        deferred_cascade_set = kwargs.pop('deferred_cascade_set', None)
-        deferred_save_set = kwargs.pop('deferred_save_set', None)
+        regeneration_path = (self.href,) + kwargs.pop('regeneration_path', ())
+        cascade = 'cascade_set' not in kwargs
+        cascade_set = kwargs.pop('cascade_set', set())
+        if kwargs.pop('regenerate', True):
+            self.regenerate(cascade_set)
 
-        old_data = self.data
-        if data != old_data:
-            self.data = data
+        if 'data' in self.stale_fields:
+            self.created = self.created or now()
+            self.modified = now()
+            self.version += 1
 
-            previous_linked_hrefs = self.get_link_hrefs(old_data)
-            new_linked_hrefs = self.get_link_hrefs(data)
-
-            cascade_to = (previous_linked_hrefs | new_linked_hrefs) - set(regenerated)
-
-            self.update_denormalized_fields()
+            super(Resource, self).save(*args, **kwargs)
             self.update_links()
             self.update_identifiers()
 
-            self.created = self.created or now()
-            self.modified = now()
-
-            if deferred_save_set is not None:
-                deferred_save_set.add(self)
-            else:
-                self.version += 1
-                super(Resource, self).save()
-            if created:
-                signals.resource_created.send(self)
-            else:
-                signals.resource_changed.send(self, old_data=old_data)
-
-            if deferred_cascade_set is not None:
-                deferred_cascade_set |= cascade_to
-            else:
+            if cascade:
+                cascade_set -= set(regeneration_path)
                 if object_cache:
-                    cascade_resources = object_cache.resource.get_many(cascade_to)
+                    cascade_resources = object_cache.resource.get_many(cascade_set)
                 else:
-                    cascade_resources = Resource.objects.filter(href__in=cascade_to)
+                    cascade_resources = Resource.objects.filter(href__in=cascade_set)
                 for resource in cascade_resources:
-                    resource.save(regenerated=regenerated,
+                    resource.save(regeneration_path=regeneration_path,
                                   object_cache=object_cache)
-        elif self.is_stale and deferred_save_set is not None:
-            deferred_save_set.add(self)
-        elif self.is_stale:
-            super(Resource, self).save()
 
-        for date in [self.start_date, self.end_date]:
-            if date and date > now():
-                signals.request_future_resource_generation.send(self, when=date)
-                break
+            for date in [self.start_date, self.end_date]:
+                if date and date > now():
+                    signals.request_future_resource_generation.send(self, when=date)
+                    break
+
+        elif self.is_stale:
+            super(Resource, self).save(*args, **kwargs)
+
 
     def update_denormalized_fields(self):
         self.uri = self.data['@id']
