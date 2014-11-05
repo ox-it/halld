@@ -93,7 +93,7 @@ class Resource(models.Model, StaleFieldsMixin):
     def collect_data(self):
         data = Data()
         data['href'] = self.get_absolute_url()
-        data['@source'], data['identifier'] = {}, {}
+        data['@source'], data['identifier'], data['stableIdentifier'] = {}, {}, {}
         for source in self.cached_source_set:
             data['@source'][source.type_id] = copy.deepcopy(source.data)
         self.collect_identifiers(data)
@@ -101,6 +101,7 @@ class Resource(models.Model, StaleFieldsMixin):
             inference(self, data)
         for normalization in self.get_normalizations():
             normalization(self, data)
+        data['identifier'].update(data['stableIdentifier'])
 
         if not self.get_type().allow_uri_override:
             data.pop('@id', None)
@@ -254,24 +255,25 @@ class Resource(models.Model, StaleFieldsMixin):
         ])
 
     def collect_identifiers(self, data):
-        identifiers = {}
-        identifiers.update(self.get_type().get_identifiers(self, data))
-        identifiers[self.type_id] = self.identifier
+        identifiers, stable_identifiers = {}, {}
+        stable_identifiers.update(self.get_type().get_identifiers(self, data))
+        stable_identifiers[self.type_id] = self.identifier
         for source in self.cached_source_set:
             if isinstance(source.data.get('identifier'), str):
-                identifiers['source:{}'.format(source.type_id)] = source.data['identifier']
+                stable_identifiers['source:{}'.format(source.type_id)] = source.data['identifier']
         # Don't copy type name identifiers
         for resource_type in get_resource_types().values():
             if resource_type.name != self.type_id:
-                identifiers.pop(resource_type.name, None)
-        data['identifier'].update(identifiers)
-        data['identifier']['uri'] = self.get_absolute_uri(data)
+                stable_identifiers.pop(resource_type.name, None)
+        data['stableIdentifier'].update(stable_identifiers)
+        data['stableIdentifier']['uri'] = self.get_absolute_uri(data)
 
     def update_identifiers(self):
         Identifier.objects.filter(resource=self).delete()
-        if not self.extant:
-            return
-        identifiers = self.data.get('identifier', {}).items()
+        if self.extant:
+            identifiers = self.data.get('identifier', {}).items()
+        else:
+            identifiers = self.data.get('stableIdentifier', {}).items()
         try:
             with transaction.atomic():
                 Identifier.objects.bulk_create([
