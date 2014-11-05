@@ -274,28 +274,25 @@ class Resource(models.Model, StaleFieldsMixin):
         data['identifier']['uri'] = self.get_absolute_uri(data)
 
     def update_identifiers(self):
-        if self.extant:
-            identifiers = self.data.get('identifier', {}).copy()
-        else:
-            identifiers = {}
-        for current in Identifier.objects.filter(resource=self):
-            if current.scheme not in identifiers:
-                current.delete()
-                continue
-            elif current.value != identifiers[current.scheme]:
-                current.value = identifiers[current.scheme]
+        Identifier.objects.filter(resource=self).delete()
+        if not self.extant:
+            return
+        identifiers = self.data.get('identifier', {}).items()
+        try:
+            with transaction.atomic():
+                Identifier.objects.bulk_create([
+                    Identifier(resource=self, scheme=scheme, value=value)
+                    for scheme, value in identifiers
+                ])
+        except IntegrityError:
+            # One of them was duplicated, so find out which one
+            for scheme, value in identifiers:
                 try:
-                    current.save()
+                    Identifier.objects.create(resource=self,
+                                              scheme=scheme,
+                                              value=value)
                 except IntegrityError as e:
-                    raise exceptions.DuplicatedIdentifier(current.scheme, current.value) from e
-            del identifiers[current.scheme]
-        for scheme, value in identifiers.items():
-            try:
-                Identifier.objects.create(resource=self,
-                                          scheme=scheme,
-                                          value=value)
-            except IntegrityError as e:
-                raise exceptions.DuplicatedIdentifier(scheme, value) from e
+                    raise exceptions.DuplicatedIdentifier(scheme, value) from e
 
     def get_absolute_uri(self, data=None):
         data = data or self.data
