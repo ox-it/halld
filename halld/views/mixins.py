@@ -23,13 +23,13 @@ class VersioningMixin(View):
             return if_modified_since >= obj.modified
 
 class JSONRequestMixin(View):
-    def get_request_json(self, media_type='application/json'):
+    def get_request_json(self, expected_content_type='application/json'):
         try:
             content_type, options = cgi.parse_header(self.request.META['CONTENT_TYPE'])
         except KeyError:
             raise exceptions.MissingContentType()
-        if content_type != media_type:
-            raise exceptions.UnsupportedContentType(media_type)
+        if content_type != expected_content_type:
+            raise exceptions.UnsupportedContentType(content_type, expected_content_type)
         charset = options.get('charset', 'utf-8')
         try:
             reader = codecs.getreader(charset)

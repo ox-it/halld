@@ -242,12 +242,13 @@ class UnsupportedContentType(HALLDException):
     description = 'You supplied an unsupported Content-Type with your request.'
     status_code = http.client.BAD_REQUEST
 
-    def __init__(self, content_type):
-        self.content_type = content_type
+    def __init__(self, content_type, expected_content_type):
+        self.content_type, self.expected_content_type = content_type, expected_content_type
 
     def as_hal(self):
         hal = super(UnsupportedContentType, self).as_hal()
-        hal['expectedContentType'] = self.content_type
+        hal['contentType'] = self.content_type
+        hal['expectedContentType'] = self.expected_content_type
         return hal
 
 class UnsupportedRequestBodyEncoding(HALLDException):
