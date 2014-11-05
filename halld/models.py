@@ -294,7 +294,7 @@ class Resource(models.Model, StaleFieldsMixin):
         data = data or self.data
         if data.get('@id'):
             return data['@id']
-        identifiers = data.get('identifier', {})
+        identifiers = data.get('stableIdentifier', {})
         for uri_template in self.get_type().get_uri_templates():
             if uri_template is None:
                 return reverse('halld:id', args=[self.type, self.identifier])
@@ -442,11 +442,12 @@ class Link(models.Model):
 
 class Identifier(models.Model, StaleFieldsMixin):
     resource = models.ForeignKey(Resource, related_name='identifiers')
-    scheme = models.SlugField()
-    value = models.SlugField()
+    scheme = models.CharField(max_length=1024)
+    value = models.CharField(max_length=1024)
     
     class Meta:
         unique_together = (('scheme', 'value'),)
+        index_together = (('scheme', 'value'),)
 
     def save(self, *args, **kwargs):
         changed_values = self.get_changed_values()

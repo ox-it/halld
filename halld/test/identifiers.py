@@ -33,7 +33,7 @@ class IdentifiersTestCase(TestCase):
 class URITemplateTestCase(TestCase):
     def testURITemplate(self):
         resource = models.Resource.create(self.superuser, 'uri-templated')
-        self.assertEqual(resource.uri, 'http://id.example.org/' + resource.identifier)
+        self.assertEqual(resource.uri, 'http://id.example.org/resource/' + resource.identifier)
 
 
 class ByIdentifierViewTestCase(TestCase):

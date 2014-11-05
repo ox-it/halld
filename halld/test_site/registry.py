@@ -30,5 +30,5 @@ class URITemplatedResourceTypeDefinition(ResourceTypeDefinition):
     source_types = ['science']
 
     def get_uri_templates(self):
-        return ['http://id.example.org/foo/{foo}',
-                'http://id.example.org/foo/{uri-templated}']
+        return ['http://id.example.org/arbitrary/{foo}',
+                'http://id.example.org/resource/{uri-templated}']
