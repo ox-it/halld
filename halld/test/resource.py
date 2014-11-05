@@ -1,21 +1,24 @@
-from django.contrib.auth.models import User
-from django.test import RequestFactory, TestCase
+import json
 
-from .. import views
+from .base import TestCase
 
-class ResourceTestCase(TestCase):
-    def setUp(self):
-        self.factory = RequestFactory()
-        self.user = User.objects.create_superuser(username='superuser',
-                                                  email='superuser@example.com',
-                                                  password='secret')
-        self.resource_list_view = views.ResourceListView.as_view()
-        self.resource_detail_view = views.ResourceDetailView.as_view()
-        self.source_view = views.SourceDetailView.as_view()
+from .. import models
 
-    def tearDown(self):
-        User.objects.all().delete()
-
+class ResourceListTestCase(TestCase):
     def testGetResourceList(self):
         request = self.factory.get('/snake')
+        request.user = self.anonymous_user
         self.resource_list_view(request, 'snake')
+
+class ResourceDetailTestCase(TestCase):
+    def testViewResource(self):
+        resource = models.Resource.create(self.superuser, 'snake')
+        resource.data = {'title': 'Python'}
+        resource.save(regenerate=False)
+
+        request = self.factory.get('/snake/' + resource.identifier,
+                                   headers={'Accept': 'application/hal+json'})
+        request.user = self.anonymous_user
+        response = self.resource_detail_view(request, 'snake', resource.identifier)
+        hal = json.loads(response.content.decode())
+        self.assertEqual(hal.get('title'), 'Python')

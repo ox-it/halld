@@ -2,6 +2,7 @@ import abc
 import collections
 import contextlib
 import functools
+import logging
 import re
 from urllib.parse import urljoin
 
@@ -11,7 +12,11 @@ import jsonschema
 from .schema import schema
 from . import methods
 from ..registry import get_source_types, get_source_type
+from ..util.cache import ObjectCache
 from .. import exceptions
+from .. import models
+
+logger = logging.getLogger(__name__)
 
 class SourceUpdater(object):
     schema = schema
@@ -21,15 +26,18 @@ class SourceUpdater(object):
         'PATCH': methods.PatchUpdate,
         'MOVE': methods.MoveUpdate,
     }
+    max_cascades = 10
 
     source_href_re = re.compile(r'^(?P<source_href>(?P<resource_href>(?P<resource_type_href>.+)/(?P<identifier>[a-z\-\d]+))/source/(?P<source_type>[a-z\i\d:\-]+))$')
 
 
-    def __init__(self, base_href, author, committer=None, multiple=False):
+    def __init__(self, base_href, author, committer=None, multiple=False,
+                 object_cache=None):
         self.base_href = base_href
         self.author = author
         self.committer = committer or author
         self.multiple = multiple
+        self.object_cache = object_cache or ObjectCache(self.committer)
 
     @contextlib.contextmanager
     def save_wrapper(self, errors, error_handling, with_transaction=None):
@@ -50,9 +58,10 @@ class SourceUpdater(object):
         """
         Updates sources and fires events.
         """
-        from ..models import Resource, Source
+        from ..models import Source
 
         updates = data['updates']
+        logger.info("Performing %d updates for user %s", len(updates), self.committer.username)
         error_handling = data.get('error-handling', "fail-first")
         errors = []
         save_wrapper = functools.partial(self.save_wrapper, errors, error_handling)
@@ -79,7 +88,7 @@ class SourceUpdater(object):
         if missing_source_types:
             raise exceptions.NoSuchSourceType(missing_source_types)
 
-        resources = {r.href: r for r in Resource.objects.filter(href__in=resource_hrefs)}
+        resources = {r.href: r for r in self.object_cache.resource.get_many(resource_hrefs, ignore_missing=True)}
         missing_hrefs = resource_hrefs - set(resources)
         if missing_hrefs:
             raise exceptions.SourceDataWithoutResource(missing_hrefs)
@@ -89,7 +98,10 @@ class SourceUpdater(object):
 
         results = collections.defaultdict(set)
         modified = set()
-        for update in updates:
+        for i, update in enumerate(updates, 1):
+            if i % 100 == 0:
+                logger.debug("Updating source %d of %d for user %s",
+                             i, len(updates), self.committer.username)
             try:
                 method = self.methods[update['method']].from_json(update)
             except KeyError as e:
@@ -118,14 +130,46 @@ class SourceUpdater(object):
                 modified.add(source)
             results[result].add(source)
 
-        for source in modified:
+        for i, source in enumerate(modified, 1):
+            if i % 100 == 0:
+                logger.debug("Saving source %d of %d for user %s",
+                             i, len(modified), self.committer.username)
             with save_wrapper():
                 source.save(cascade_to_resource=False)
 
-        modified_resources = set(source.resource for source in modified)
-        for modified_resource in modified_resources:
+        save_set = set()
+
+        sources_by_resource = collections.defaultdict(set)
+        for source in Source.objects.filter(resource__in=set(resources)):
+            sources_by_resource[source.resource_id].add(source)
+        for href, sources in sources_by_resource.items():
+            resources[href].cached_source_set = sources
+
+        resources_to_save = set(resources.values())
+        for i in range(1, self.max_cascades + 1):
+            logger.debug("Cascade %d: %d resources to save",
+                             i, len(resources_to_save))
+            cascade_set = set()
+            for j, resource in enumerate(resources_to_save, 1):
+                if j % 100 == 0:
+                    logger.debug("Regenerating resource %d of %d for user %s (%d cascades)",
+                                 j, len(resources_to_save), self.committer.username,
+                                 len(cascade_set))
+                if resource.regenerate(cascade_set):
+                    save_set.add(resource)
+            if not cascade_set:
+                break
+            resources_to_save = set(self.object_cache.resource.get_many(cascade_set))
+        else:
+            logger.warning("Still %d resources to cascade to after %d cascades",
+                           len(cascade_set), self.max_cascades)
+
+        for i, resource in enumerate(save_set, 1):
+            if i % 100 == 0:
+                logger.debug("Saving resource %d of %d for user %s",
+                             i, len(resources), self.committer.username)
             with save_wrapper():
-                modified_resource.save()
+                resource.save(force_update=True)
 
         if errors:
             if self.error_handling == 'ignore':

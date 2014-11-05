@@ -24,3 +24,11 @@ class DocumentResourceTypeDefinition(FileResourceTypeDefinition):
     name = 'document'
 
     source_types = ['file-metadata:image']
+
+class URITemplatedResourceTypeDefinition(ResourceTypeDefinition):
+    name = 'uri-templated'
+    source_types = ['science']
+
+    def get_uri_templates(self):
+        return ['http://id.example.org/arbitrary/{foo}',
+                'http://id.example.org/resource/{uri-templated}']

@@ -29,3 +29,25 @@ class IdentifiersTestCase(TestCase):
         assert models.Identifier.objects.filter(scheme='snake',
                                                 value=identifier,
                                                 resource=resource).exists()
+
+class URITemplateTestCase(TestCase):
+    def testURITemplate(self):
+        resource = models.Resource.create(self.superuser, 'uri-templated')
+        self.assertEqual(resource.uri, 'http://id.example.org/resource/' + resource.identifier)
+
+
+class ByIdentifierViewTestCase(TestCase):
+    def testRetrieveSourceAllResources(self):
+        _, id_one, _ = self.create_resource_and_source()
+        _, id_two, _ = self.create_resource_and_source()
+        data = {'scheme': 'snake',
+                'allInScheme': True,
+                'includeSources': ['science']}
+        request = self.factory.post('/by-identifier', json.dumps(data), 'application/json')
+        request.user = self.anonymous_user
+        response = self.by_identifier_view(request)
+        data = json.loads(response.content.decode())
+        self.assert_(id_one in data)
+        self.assert_(id_two in data)
+        self.assert_('science' in data[id_one]['sources'])
+        self.assert_('science' in data[id_two]['sources'])

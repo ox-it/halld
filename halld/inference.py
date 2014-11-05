@@ -16,10 +16,10 @@ class Inference(metaclass=abc.ABCMeta):
 class Tags(Inference):
     def __call__(self, resource, data):
         tags = resource.get_type().get_contributed_tags(resource, data)
-        for source in resource.source_set.all():
+        for source in resource.cached_source_set:
             if not source.deleted:
                 tags |= source.get_type().get_contributed_tags(source, source.data)
-        data['tags'] = list(tags)
+        data['tags'] = list(tags | set(data.get('tags', ())))
         return data
 
 class FromPointers(Inference):

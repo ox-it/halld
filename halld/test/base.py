@@ -1,4 +1,4 @@
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User, AnonymousUser
 import django.test
 
 from ..models import Changeset, Link, Identifier, Source, Resource
@@ -10,12 +10,13 @@ class TestCase(django.test.TestCase):
         self.superuser = User.objects.create_superuser(username='superuser',
                                                        email='superuser@example.com',
                                                        password='secret')
+        self.anonymous_user = AnonymousUser
         self.changeset_list_view = views.ChangesetListView.as_view()
         self.index_view = views.IndexView.as_view()
         self.by_identifier_view = views.ByIdentifierView.as_view()
         #self.source_type_view = views.SourceTypeView.as_view()
         self.source_list_view = views.SourceListView.as_view()
-        self.source_view = views.SourceDetailView.as_view()
+        self.source_detail_view = views.SourceDetailView.as_view()
         self.resource_detail_view = views.ResourceDetailView.as_view()
         self.resource_list_view = views.ResourceListView.as_view()
 
@@ -37,7 +38,7 @@ class TestCase(django.test.TestCase):
         response, identifier = self.create_resource()
         resource_href = response['Location']
         source_href = resource_href + '/source/science'
-        request = self.factory.put(source_href, '{}', headers={'Content-type': 'application/hal+json'})
-        request.user = self.user
-        response = self.source_view(identifier, source_type)
+        request = self.factory.put(source_href, '{}', 'application/hal+json')
+        request.user = self.superuser
+        response = self.source_detail_view(request, 'snake', identifier, source_type)
         return response, identifier, source_href

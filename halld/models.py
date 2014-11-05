@@ -22,7 +22,6 @@ from .registry import ResourceTypeDefinition, get_resource_types, get_resource_t
 from .registry import get_source_type
 from .conf import is_spatial_backend
 from .data import Data
-from . import changeset
 
 if is_spatial_backend:
     from django.contrib.gis.db import models
@@ -82,69 +81,97 @@ class Resource(models.Model, StaleFieldsMixin):
     def get_etag(self):
         return hashlib.sha1("{}/{}".format(self.href, self.version).encode()).hexdigest()
 
-    def generate_data(self):
+    @property
+    def cached_source_set(self):
+        if not hasattr(self, '_cached_source_set'):
+            self._cached_source_set = set(self.source_set.all())
+        return self._cached_source_set
+    @cached_source_set.setter
+    def cached_source_set(self, value):
+        self._cached_source_set = set(value)
+
+    def collect_data(self):
         data = Data()
         data['href'] = self.get_absolute_url()
-        data['@source'], data['identifier'] = {}, {}
-        for source in self.source_set.all():
+        data['@source'], data['identifier'], data['stableIdentifier'] = {}, {}, {}
+        for source in self.cached_source_set:
             data['@source'][source.type_id] = copy.deepcopy(source.data)
         self.collect_identifiers(data)
         for inference in self.get_inferences():
             inference(self, data)
         for normalization in self.get_normalizations():
             normalization(self, data)
+        data['identifier'].update(data['stableIdentifier'])
 
         if not self.get_type().allow_uri_override:
             data.pop('@id', None)
         if not data.get('@id'):
             data['@id'] = self.get_absolute_uri(data)
         del data['@source']
-
         return data
 
+    def regenerate(self, cascade_set):
+        data = self.collect_data()
+        if data == self.data:
+            return False
+        old_data, self.data = self.data, data
+        self.update_denormalized_fields()
+        previous_linked_hrefs = self.get_link_hrefs(old_data)
+        new_linked_hrefs = self.get_link_hrefs(data)
+        cascade_set |= (previous_linked_hrefs | new_linked_hrefs)
+        return True
+
     def save(self, *args, **kwargs):
-        created = not self.pk
+        """
+        Save, with a fair bit of cleverness. Takes the following optional kwargs:
+
+        :param regeneration_path: A tuple of hrefs already regenerated. Will
+            not try to regenerate them again.
+        :param object_cache: An ObjectCache instance, which will be used to
+            look up other Resource objects without hitting the database.
+        :param cascade_set: A set, which if provided will stop this method
+            cascading directly. Instead, resource hrefs to cascade to will be
+            added to the set.
+        :param regenerate: A boolean, which if false will stop this resource
+            regenerating, on the assumption that it's been done already.
+        """
         if not self.href:
             self.href = self.get_type().base_url + self.identifier
-        if created:
-            super(Resource, self).save(*args, **kwargs)
-        if kwargs.pop('regenerate', True) is not False:
-            data = self.generate_data()
-        regenerated = {self.href} | kwargs.pop('regenerated', set())
 
-        old_data = self.data
-        if data != old_data:
-            self.data = data
+        object_cache = kwargs.pop('object_cache', None)
+        regeneration_path = (self.href,) + kwargs.pop('regeneration_path', ())
+        cascade = 'cascade_set' not in kwargs
+        cascade_set = kwargs.pop('cascade_set', set())
+        if kwargs.pop('regenerate', True):
+            self.regenerate(cascade_set)
 
-            previous_linked_hrefs = self.get_link_hrefs(old_data)
-            new_linked_hrefs = self.get_link_hrefs(data)
-
-            cascade_to = (previous_linked_hrefs | new_linked_hrefs) - regenerated
-            regenerated |= cascade_to
-
-            self.update_denormalized_fields()
-            self.update_links()
-            self.update_identifiers()
-
+        if 'data' in self.stale_fields:
             self.created = self.created or now()
             self.modified = now()
             self.version += 1
 
-            super(Resource, self).save()
-            if created:
-                signals.resource_created.send(self)
-            else:
-                signals.resource_changed.send(self, old_data=old_data)
+            super(Resource, self).save(*args, **kwargs)
+            self.update_links()
+            self.update_identifiers()
 
-            for resource in Resource.objects.filter(href__in=cascade_to):
-                resource.save(regenerated=regenerated)
+            if cascade:
+                cascade_set -= set(regeneration_path)
+                if object_cache:
+                    cascade_resources = object_cache.resource.get_many(cascade_set)
+                else:
+                    cascade_resources = Resource.objects.filter(href__in=cascade_set)
+                for resource in cascade_resources:
+                    resource.save(regeneration_path=regeneration_path,
+                                  object_cache=object_cache)
+
+            for date in [self.start_date, self.end_date]:
+                if date and date > now():
+                    signals.request_future_resource_generation.send(self, when=date)
+                    break
+
         elif self.is_stale:
-            super(Resource, self).save()
+            super(Resource, self).save(*args, **kwargs)
 
-        for date in [self.start_date, self.end_date]:
-            if date and date > now():
-                signals.request_future_resource_generation.send(self, when=date)
-                break
 
     def update_denormalized_fields(self):
         self.uri = self.data['@id']
@@ -162,7 +189,8 @@ class Resource(models.Model, StaleFieldsMixin):
                 self.extant = False
         else:
             self.end_date = None
-        
+        self.data['@extant'] = self.extant
+
         if is_spatial_backend:
             point = self.data.get('@point')
             if isinstance(point, dict):
@@ -188,8 +216,8 @@ class Resource(models.Model, StaleFieldsMixin):
     def get_type(self):
         return get_resource_type(self.type_id)
 
-    def get_hal(self, user, data=None):
-        return self.get_type().get_hal(user, self, data or self.data)
+    def get_hal(self, user, object_cache, data=None, exclude_links=False):
+        return self.get_type().get_hal(user, self, object_cache, data or self.data, exclude_links)
 
     def get_jsonld(self, user, data):
         jsonld = self.get_hal(user, data)
@@ -212,98 +240,60 @@ class Resource(models.Model, StaleFieldsMixin):
             super(Resource, self).save()
 
         link_data = set()
-        hrefs = set()
         for link_type in get_link_types().values():
             links = self.data.get(link_type.name, ())
             for link in links:
                 if link.get('inbound'):
                     continue
-                link_data.add((self.href,
-                               link['href'],
-                               link_type.name))
-                hrefs.add(link['href'])
-        link_data |= set((l[1], l[0], get_link_type(l[2]).inverse_name) for l in link_data)
+                link_data.add((link['href'], link_type.name))
 
-        targets = {r.href: r for r in Resource.objects.filter(href__in=hrefs)}
-        targets[self.href] = self
-
-        links = list(Link.objects.filter(source=self).select_related('active', 'passive'))
-        for link in links:
-            lid = link.active_href, link.passive_href, link.type_id
-            if lid in link_data:
-                extant = get_link_type(link.type_id).timeless or ((not link.active_id or link.active.extant)
-                                                              and (not link.passive_id or link.passive.extant))
-                if extant != link.extant:
-                    link.extant = extant
-                    link.save()
-                link_data.remove(lid)
-            else:
-                link.delete()
-        for active_href, passive_href, link_name in link_data:
-            link_type = get_link_type(link_name)
-            active = targets.get(active_href)
-            passive = targets.get(passive_href)
-            target = active if passive_href == self.href else passive
-            if link_type.strict:
-                if not active:
-                    raise exceptions.LinkTargetDoesNotExist(get_link_type(link_name), active_href)
-                if not passive:
-                    raise exceptions.LinkTargetDoesNotExist(get_link_type(link_name), passive_href)
-            links.append(Link.objects.create(source=self,
-                                             target=target,
-                                             active_href=active_href,
-                                             passive_href=passive_href,
-                                             active=active,
-                                             passive=passive,
-                                             type_id=link_name,
-                                             extant=link_type.timeless or (self.extant
-                                                                       and (target is None or target.extant))))
-
-        targets.pop(self.href)
+        self.link_set.all().delete()
+        Link.objects.bulk_create([
+            Link(source=self, target_href=href, type_id=link_name)
+            for href, link_name in link_data
+        ])
 
     def collect_identifiers(self, data):
-        identifiers = {}
-        identifiers.update(self.get_type().get_identifiers(self, data))
-        identifiers[self.type_id] = self.identifier
-        for source in self.source_set.all():
+        identifiers, stable_identifiers = {}, {}
+        stable_identifiers.update(self.get_type().get_identifiers(self, data))
+        stable_identifiers[self.type_id] = self.identifier
+        for source in self.cached_source_set:
             if isinstance(source.data.get('identifier'), str):
-                identifiers['source:{}'.format(source.type_id)] = source.data['identifier']
+                stable_identifiers['source:{}'.format(source.type_id)] = source.data['identifier']
         # Don't copy type name identifiers
         for resource_type in get_resource_types().values():
             if resource_type.name != self.type_id:
-                identifiers.pop(resource_type.name, None)
-        data['identifier'].update(identifiers)
-        data['identifier']['uri'] = self.get_absolute_uri(data)
+                stable_identifiers.pop(resource_type.name, None)
+        data['stableIdentifier'].update(stable_identifiers)
+        data['stableIdentifier']['uri'] = self.get_absolute_uri(data)
 
     def update_identifiers(self):
+        Identifier.objects.filter(resource=self).delete()
         if self.extant:
-            identifiers = self.data.get('identifier', {}).copy()
+            identifiers = self.data.get('identifier', {}).items()
         else:
-            identifiers = {}
-        for current in Identifier.objects.filter(resource=self):
-            if current.scheme not in identifiers:
-                current.delete()
-                continue
-            elif current.value != identifiers[current.scheme]:
-                current.value = identifiers[current.scheme]
+            identifiers = self.data.get('stableIdentifier', {}).items()
+        try:
+            with transaction.atomic():
+                Identifier.objects.bulk_create([
+                    Identifier(resource=self, scheme=scheme, value=value)
+                    for scheme, value in identifiers
+                ])
+        except IntegrityError:
+            # One of them was duplicated, so find out which one
+            for scheme, value in identifiers:
                 try:
-                    current.save()
+                    Identifier.objects.create(resource=self,
+                                              scheme=scheme,
+                                              value=value)
                 except IntegrityError as e:
-                    raise exceptions.DuplicatedIdentifier(current.scheme, current.value) from e
-            del identifiers[current.scheme]
-        for scheme, value in identifiers.items():
-            try:
-                Identifier.objects.create(resource=self,
-                                          scheme=scheme,
-                                          value=value)
-            except IntegrityError as e:
-                raise exceptions.DuplicatedIdentifier(scheme, value) from e
+                    raise exceptions.DuplicatedIdentifier(scheme, value) from e
 
     def get_absolute_uri(self, data=None):
         data = data or self.data
         if data.get('@id'):
             return data['@id']
-        identifiers = data.get('identifier', {})
+        identifiers = data.get('stableIdentifier', {})
         for uri_template in self.get_type().get_uri_templates():
             if uri_template is None:
                 return reverse('halld:id', args=[self.type, self.identifier])
@@ -349,6 +339,7 @@ class Resource(models.Model, StaleFieldsMixin):
         index_together = [
             ['type', 'identifier'],
         ]
+        ordering = ('type', 'identifier')
 
 class SourceType(models.Model):
     name = models.SlugField(primary_key=True)
@@ -444,22 +435,18 @@ class LinkType(models.Model):
         return self.name
 
 class Link(models.Model):
-    source = models.ForeignKey(Resource, related_name='link_source')
-    target = models.ForeignKey(Resource, related_name='target', null=True, blank=True)
-    active_href = models.CharField(max_length=MAX_HREF_LENGTH)
-    passive_href = models.CharField(max_length=MAX_HREF_LENGTH)
-    active = models.ForeignKey(Resource, related_name='link_active', null=True, blank=True)
-    passive = models.ForeignKey(Resource, related_name='link_passive', null=True, blank=True)
+    source = models.ForeignKey(Resource, db_index=True)
+    target_href = models.CharField(max_length=MAX_HREF_LENGTH, db_index=True)
     type = models.ForeignKey(LinkType)
-    extant = models.BooleanField(default=True)
 
 class Identifier(models.Model, StaleFieldsMixin):
     resource = models.ForeignKey(Resource, related_name='identifiers')
-    scheme = models.SlugField()
-    value = models.SlugField()
+    scheme = models.CharField(max_length=1024)
+    value = models.CharField(max_length=1024)
     
     class Meta:
         unique_together = (('scheme', 'value'),)
+        index_together = (('scheme', 'value'),)
 
     def save(self, *args, **kwargs):
         changed_values = self.get_changed_values()
@@ -503,7 +490,9 @@ class Changeset(models.Model):
         return super(Changeset, self).save(*args, **kwargs)
     
     @transaction.atomic
-    def perform(self, multiple=False):
+    def perform(self, multiple=False, object_cache=None):
+        from . import changeset # to avoid a circular import
+
         if self.state in ('pending-approval', 'performed', 'failed'):
             return
         try:
@@ -515,7 +504,8 @@ class Changeset(models.Model):
                 Changeset.objects.select_for_update().get(pk=self.pk, version=self.version)
             except Changeset.DoesNotExist as e:
                 raise exceptions.ChangesetConflict() from e
-        updater = changeset.SourceUpdater(self.base_href, self.author, self.committer, multiple=multiple)
+        updater = changeset.SourceUpdater(self.base_href, self.author, self.committer, multiple=multiple,
+                                          object_cache=object_cache)
         try:
             with transaction.atomic():
                 updater.perform_updates(self.data)

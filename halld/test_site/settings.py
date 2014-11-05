@@ -17,13 +17,15 @@ RESOURCE_TYPES = [
     'halld.test_site.registry.DocumentResourceTypeDefinition',
     'halld.test_site.registry.SnakeResourceTypeDefinition',
     'halld.test_site.registry.PenguinResourceTypeDefinition',
+    'halld.test_site.registry.URITemplatedResourceTypeDefinition',
 ]
 
 from halld.registry import LinkTypeDefinition, SourceTypeDefinition
 
 LINK_TYPES = [
     LinkTypeDefinition.new('eats', 'eatenBy'),
-    LinkTypeDefinition.new('timelessF', 'timelessR', timeless=True)
+    LinkTypeDefinition.new('timelessF', 'timelessR', timeless=True),
+    LinkTypeDefinition.new('functional', 'inverseFunctional', functional=True),
 ]
 
 SOURCE_TYPES = [
@@ -38,3 +40,6 @@ BASE_URL = 'http://testserver/'
 ROOT_URLCONF = 'halld.test_site.urls'
 
 FILE_METADATA_USER = 'file-metadata'
+
+MIDDLEWARE_CLASSES = (
+)
