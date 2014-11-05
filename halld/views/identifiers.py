@@ -77,7 +77,7 @@ class ByIdentifierView(JSONRequestMixin):
         if query.get('includeSources'):
             for source in Source.objects.filter(resource__in=resources,
                                                 type_id__in=query['includeSources']):
-                by_resource[source.resource_id]['sources'][source.typ_id] = source.get_hal(request.user)
+                by_resource[source.resource_id]['sources'][source.type_id] = source.get_hal(request.user)
 
         if 'values' in query:
             for value in set(query['values']) - seen_values:
