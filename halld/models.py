@@ -189,7 +189,8 @@ class Resource(models.Model, StaleFieldsMixin):
                 self.extant = False
         else:
             self.end_date = None
-        
+        self.data['@extant'] = self.extant
+
         if is_spatial_backend:
             point = self.data.get('@point')
             if isinstance(point, dict):
