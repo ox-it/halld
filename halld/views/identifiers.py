@@ -5,7 +5,7 @@ import jsonschema
 
 from .mixins import JSONRequestMixin
 from .. import exceptions
-from ..models import Identifier
+from ..models import Identifier, Source
 
 __all__ = ['ByIdentifierView']
 
@@ -56,24 +56,29 @@ class ByIdentifierView(JSONRequestMixin):
         if 'values' in query:
             identifiers = identifiers.filter(value__in=query['values'])
         identifiers = identifiers.select_related('resource')
+        resources = set(identifier.resource for identifier in identifiers)
 
-        if query.get('includeSources'):
-            identifiers = identifiers.select_related('resource__source_set')
         seen_values = set()
         results = {}
+        by_resource = {}
+
         for identifier in identifiers:
             resource = identifier.resource
             result = {'type': resource.type_id, 'identifier': resource.identifier, 'resourceHref': resource.pk}
+            by_resource[resource.pk] = result
             if query.get('includeData'):
                 data = resource.filter_data(request.user, resource.data)
                 result['data'] = resource.get_hal(request.user, data)
             if query.get('includeSources'):
                 result['sources'] = {n: None for n in query['includeSources']}
-                sources = resource.source_set.filter(type_id__in=query['includeSources'])
-                for source in sources:
-                    result['sources'][source.type_id] = source.get_hal(request.user)
             results[identifier.value] = result
             seen_values.add(identifier.value)
+
+        if query.get('includeSources'):
+            for source in Source.objects.filter(resource__in=resources,
+                                                type_id__in=query['includeSources']):
+                by_resource[source.resource_id]['sources'][source.typ_id] = source.get_hal(request.user)
+
         if 'values' in query:
             for value in set(query['values']) - seen_values:
                 results[value] = None
