@@ -30,6 +30,12 @@ class IdentifiersTestCase(TestCase):
                                                 value=identifier,
                                                 resource=resource).exists()
 
+class URITemplateTestCase(TestCase):
+    def testURITemplate(self):
+        resource = models.Resource.create(self.superuser, 'uri-templated')
+        self.assertEqual(resource.uri, 'http://id.example.org/' + resource.identifier)
+
+
 class ByIdentifierViewTestCase(TestCase):
     def testRetrieveSourceAllResources(self):
         _, id_one, _ = self.create_resource_and_source()

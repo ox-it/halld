@@ -17,6 +17,7 @@ RESOURCE_TYPES = [
     'halld.test_site.registry.DocumentResourceTypeDefinition',
     'halld.test_site.registry.SnakeResourceTypeDefinition',
     'halld.test_site.registry.PenguinResourceTypeDefinition',
+    'halld.test_site.registry.URITemplatedResourceTypeDefinition',
 ]
 
 from halld.registry import LinkTypeDefinition, SourceTypeDefinition
