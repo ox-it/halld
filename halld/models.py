@@ -81,11 +81,17 @@ class Resource(models.Model, StaleFieldsMixin):
     def get_etag(self):
         return hashlib.sha1("{}/{}".format(self.href, self.version).encode()).hexdigest()
 
+    @property
+    def cached_source_set(self):
+        if not hasattr(self, '_cached_source_set'):
+            self._cached_source_set = self.source_set.all()
+        return self._cached_source_set
+
     def generate_data(self):
         data = Data()
         data['href'] = self.get_absolute_url()
         data['@source'], data['identifier'] = {}, {}
-        for source in self.source_set.all():
+        for source in self.cached_source_set:
             data['@source'][source.type_id] = copy.deepcopy(source.data)
         self.collect_identifiers(data)
         for inference in self.get_inferences():
@@ -257,7 +263,7 @@ class Resource(models.Model, StaleFieldsMixin):
         identifiers = {}
         identifiers.update(self.get_type().get_identifiers(self, data))
         identifiers[self.type_id] = self.identifier
-        for source in self.source_set.all():
+        for source in self.cached_source_set:
             if isinstance(source.data.get('identifier'), str):
                 identifiers['source:{}'.format(source.type_id)] = source.data['identifier']
         # Don't copy type name identifiers
