@@ -85,7 +85,6 @@ class PatchUpdate(Update):
         if not self.patch:
             return
         if not self.create_empty_if_missing and not source.pk:
-            print(self.patch)
             raise exceptions.NoSuchSource(source.href)
         if source.deleted:
             raise exceptions.CantPatchDeletedSource
