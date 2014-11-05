@@ -29,7 +29,7 @@ class BaseCache(object, metaclass=abc.ABCMeta):
 
     def add_many(self, objs):
         for obj in objs:
-            self.resources[obj.href] = obj
+            self.objs[obj.href] = obj
 
     def get(self, pk):
         return next(self.get_many([pk]))
