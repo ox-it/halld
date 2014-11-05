@@ -135,7 +135,6 @@ class Resource(models.Model, StaleFieldsMixin):
         :param regenerate: A boolean, which if false will stop this resource
             regenerating, on the assumption that it's been done already.
         """
-        created = not self.pk
         if not self.href:
             self.href = self.get_type().base_url + self.identifier
 
