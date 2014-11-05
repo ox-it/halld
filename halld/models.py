@@ -102,6 +102,20 @@ class Resource(models.Model, StaleFieldsMixin):
         return data
 
     def save(self, *args, **kwargs):
+        """
+        Save, with a fair bit of cleverness. Takes the following optional kwargs:
+
+        :param regenerated: A tuple of hrefs already regenerated. Will not try to regenerate them again.
+        :param object_cache: An ObjectCache instance, which will be used to
+            look up other Resource objects without hitting the database.
+        :param deferred_cascade_set: A set, which if provided will stop this
+            method cascading directly. Resource hrefs to cascade to will be
+            added to the set.
+        :param deferred_save_set: A set, which if present will stop this
+            method actually saving. Instead, it will add itself to this set,
+            and the caller is responsible for incrementing version and calling
+            super(Resource, self).save() later.
+        """
         created = not self.pk
         if not self.href:
             self.href = self.get_type().base_url + self.identifier
@@ -111,6 +125,8 @@ class Resource(models.Model, StaleFieldsMixin):
             data = self.generate_data()
         regenerated = (self.href,) + kwargs.pop('regenerated', ())
         object_cache = kwargs.pop('object_cache', None)
+        deferred_cascade_set = kwargs.pop('deferred_cascade_set', None)
+        deferred_save_set = kwargs.pop('deferred_save_set', None)
 
         old_data = self.data
         if data != old_data:
@@ -127,21 +143,29 @@ class Resource(models.Model, StaleFieldsMixin):
 
             self.created = self.created or now()
             self.modified = now()
-            self.version += 1
 
-            super(Resource, self).save()
+            if deferred_save_set is not None:
+                deferred_save_set.add(self)
+            else:
+                self.version += 1
+                super(Resource, self).save()
             if created:
                 signals.resource_created.send(self)
             else:
                 signals.resource_changed.send(self, old_data=old_data)
 
-            if object_cache:
-                cascade_resources = object_cache.resource.get_many(cascade_to)
+            if deferred_cascade_set is not None:
+                deferred_cascade_set |= cascade_to
             else:
-                cascade_resources = Resource.objects.filter(href__in=cascade_to)
-            for resource in cascade_resources:
-                resource.save(regenerated=regenerated,
-                              object_cache=object_cache)
+                if object_cache:
+                    cascade_resources = object_cache.resource.get_many(cascade_to)
+                else:
+                    cascade_resources = Resource.objects.filter(href__in=cascade_to)
+                for resource in cascade_resources:
+                    resource.save(regenerated=regenerated,
+                                  object_cache=object_cache)
+        elif self.is_stale and deferred_save_set is not None:
+            deferred_save_set.add(self)
         elif self.is_stale:
             super(Resource, self).save()
 

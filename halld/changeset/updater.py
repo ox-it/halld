@@ -14,6 +14,7 @@ from . import methods
 from ..registry import get_source_types, get_source_type
 from ..util.cache import ObjectCache
 from .. import exceptions
+from .. import models
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,7 @@ class SourceUpdater(object):
         'PATCH': methods.PatchUpdate,
         'MOVE': methods.MoveUpdate,
     }
+    max_cascades = 10
 
     source_href_re = re.compile(r'^(?P<source_href>(?P<resource_href>(?P<resource_type_href>.+)/(?P<identifier>[a-z\-\d]+))/source/(?P<source_type>[a-z\i\d:\-]+))$')
 
@@ -135,13 +137,35 @@ class SourceUpdater(object):
             with save_wrapper():
                 source.save(cascade_to_resource=False)
 
-        modified_resources = set(source.resource for source in modified)
-        for i, modified_resource in enumerate(modified_resources, 1):
+        deferred_save_set = set()
+
+        resources_to_save = set(resources.values())
+        for i in range(1, self.max_cascades + 1):
+            logger.debug("Cascade %d: %d resources to save",
+                             i, len(resources_to_save))
+            deferred_cascade_set = set()
+            for j, resource in enumerate(resources_to_save, 1):
+                if j % 100 == 0:
+                    logger.debug("Regenerating resource %d of %d for user %s (%d cascades)",
+                                 j, len(resources_to_save), self.committer.username,
+                                 len(deferred_cascade_set))
+                resource.save(object_cache=self.object_cache,
+                              deferred_save_set=deferred_save_set,
+                              deferred_cascade_set=deferred_cascade_set)
+            if not deferred_cascade_set:
+                break
+            resources_to_save = set(self.object_cache.resource.get_many(deferred_cascade_set))
+        else:
+            logger.warning("Still %d resources to cascade to after %d cascades",
+                           len(deferred_cascade_set), self.max_cascades)
+
+        for i, resource in enumerate(deferred_save_set, 1):
             if i % 100 == 0:
                 logger.debug("Saving resource %d of %d for user %s",
-                             i, len(modified_resources), self.committer.username)
+                             i, len(resources), self.committer.username)
             with save_wrapper():
-                modified_resource.save(object_cache=self.object_cache)
+                resource.version += 1
+                super(models.Resource, resource).save(force_update=True)
 
         if errors:
             if self.error_handling == 'ignore':
