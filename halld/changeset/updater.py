@@ -139,6 +139,12 @@ class SourceUpdater(object):
 
         save_set = set()
 
+        sources_by_resource = collections.defaultdict(set)
+        for source in Source.objects.filter(resource__in=set(resources)):
+            sources_by_resource[source.resource_id].add(source)
+        for href, sources in sources_by_resource.items():
+            resources[href].cached_source_set = sources
+
         resources_to_save = set(resources.values())
         for i in range(1, self.max_cascades + 1):
             logger.debug("Cascade %d: %d resources to save",
