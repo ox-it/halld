@@ -109,7 +109,7 @@ class Resource(models.Model, StaleFieldsMixin):
             super(Resource, self).save(*args, **kwargs)
         if kwargs.pop('regenerate', True) is not False:
             data = self.generate_data()
-        regenerated = {self.href} | kwargs.pop('regenerated', set())
+        regenerated = (self.href,) + kwargs.pop('regenerated', ())
         object_cache = kwargs.pop('object_cache', None)
 
         old_data = self.data
@@ -119,8 +119,7 @@ class Resource(models.Model, StaleFieldsMixin):
             previous_linked_hrefs = self.get_link_hrefs(old_data)
             new_linked_hrefs = self.get_link_hrefs(data)
 
-            cascade_to = (previous_linked_hrefs | new_linked_hrefs) - regenerated
-            regenerated |= cascade_to
+            cascade_to = (previous_linked_hrefs | new_linked_hrefs) - set(regenerated)
 
             self.update_denormalized_fields()
             self.update_links()
