@@ -2,6 +2,7 @@ import abc
 import collections
 import contextlib
 import functools
+import logging
 import re
 from urllib.parse import urljoin
 
@@ -58,6 +59,7 @@ class SourceUpdater(object):
         from ..models import Source
 
         updates = data['updates']
+        logger.info("Performing %d updates for user %s", len(updates), self.committer.username)
         error_handling = data.get('error-handling', "fail-first")
         errors = []
         save_wrapper = functools.partial(self.save_wrapper, errors, error_handling)
@@ -94,7 +96,10 @@ class SourceUpdater(object):
 
         results = collections.defaultdict(set)
         modified = set()
-        for update in updates:
+        for i, update in enumerate(updates, 1):
+            if i % 100 == 0:
+                logger.debug("Updating source %d of %d for user %s",
+                             i, len(updates), self.committer.username)
             try:
                 method = self.methods[update['method']].from_json(update)
             except KeyError as e:
@@ -123,12 +128,18 @@ class SourceUpdater(object):
                 modified.add(source)
             results[result].add(source)
 
-        for source in modified:
+        for i, source in enumerate(modified, 1):
+            if i % 100 == 0:
+                logger.debug("Saving source %d of %d for user %s",
+                             i, len(modified), self.committer.username)
             with save_wrapper():
                 source.save(cascade_to_resource=False)
 
         modified_resources = set(source.resource for source in modified)
-        for modified_resource in modified_resources:
+        for i, modified_resource in enumerate(modified_resources, 1):
+            if i % 100 == 0:
+                logger.debug("Saving resource %d of %d for user %s",
+                             i, len(modified_resources), self.committer.username)
             with save_wrapper():
                 modified_resource.save(object_cache=self.object_cache)
 
