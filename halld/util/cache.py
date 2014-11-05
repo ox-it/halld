@@ -10,8 +10,9 @@ class BaseCache(object, metaclass=abc.ABCMeta):
     @abc.abstractproperty
     def Model(self): pass
 
-    def __init__(self):
+    def __init__(self, object_cache):
         self.objs = {}
+        self.object_cache = object_cache
     
     def get_many(self, pks, ignore_missing=False):
         pks_to_fetch = set(pks) - set(self.objs)
@@ -40,23 +41,23 @@ class SourceCache(BaseCache):
 class ResourceCache(BaseCache):
     Model = models.Resource
 
-    def __init__(self, user):
+    def __init__(self, object_cache, user):
         self.user = user
-        super(ResourceCache, self).__init__()
+        super(ResourceCache, self).__init__(object_cache)
 
     def get_hal(self, href, exclude_links=False):
-        resource = self.get_resource(href)
+        resource = self.get(href)
         cache_key = 'halld:hal:{0}:{1}'.format(self.user.username,
                                                sha256(resource.href.encode('utf-8')).hexdigest())
         hal = cache.get(cache_key)
         if hal and hal['_meta']['version'] == resource.version:
             return hal
         
-        hal = resource.get_hal(self.user, self, exclude_links=exclude_links)
+        hal = resource.get_hal(self.user, self.object_cache, exclude_links=exclude_links)
         cache.set(cache_key, hal)
         return hal
 
 class ObjectCache(object):
     def __init__(self, user):
-        self.source = SourceCache()
-        self.resource = ResourceCache(user)
+        self.source = SourceCache(self)
+        self.resource = ResourceCache(self, user)
