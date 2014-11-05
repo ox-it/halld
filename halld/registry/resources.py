@@ -77,6 +77,7 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
 
     def get_hal(self, user, resource, object_cache, data, exclude_links=False):
         hal = copy.deepcopy(data)
+        hal['@extant'] = resource.extant
         links, embedded = {}, {}
         links['self'] = {'href': resource.href}
 

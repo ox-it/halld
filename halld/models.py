@@ -176,7 +176,7 @@ class Resource(models.Model, StaleFieldsMixin):
     def update_denormalized_fields(self):
         self.uri = self.data['@id']
         self.deleted = bool(self.data.get('@deleted', False))
-        self.extant = self.data.get('@extant', True)
+        self.extant = bool(self.data.get('@extant', True))
         if '@startDate' in self.data:
             self.start_date = localize(self.data['@startDate'])
             if self.start_date > now():
@@ -189,7 +189,6 @@ class Resource(models.Model, StaleFieldsMixin):
                 self.extant = False
         else:
             self.end_date = None
-        self.data['@extant'] = self.extant
 
         if is_spatial_backend:
             point = self.data.get('@point')
