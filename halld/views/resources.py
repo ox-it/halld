@@ -54,7 +54,7 @@ class ResourceListView(HALLDView):
                 'findSourceList': {'href': reverse('halld:resource-list', args=[resource_type.name]) + '/{identifier}/source',
                                    'templated': True},
             },
-            '_embedded': {'item' :[resource.get_hal(request.user, self.resource_cache) for resource in page.object_list]},
+            '_embedded': {'item': [self.object_cache.resource.get_hal(resource.href) for resource in page.object_list]},
         })
         if page.number > 1:
             hal['_links']['previous'] = {'href': '?page={0}'.format(page.number - 1)}

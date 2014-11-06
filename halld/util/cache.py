@@ -21,8 +21,8 @@ class BaseCache(object, metaclass=abc.ABCMeta):
             for obj in objs:
                 self.objs[obj.pk] = obj
                 pks_to_fetch.remove(obj.pk)
-            for pks in pks_to_fetch:
-                self.objs[pks] = None
+            for pk in pks_to_fetch:
+                self.objs[pk] = None
         missing_pks = [pk for pk in pks if not self.objs[pk]]
         if not ignore_missing and missing_pks:
             raise exceptions.NoSuchResource(missing_pks)
