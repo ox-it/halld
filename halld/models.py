@@ -151,7 +151,8 @@ class Resource(models.Model, StaleFieldsMixin):
             self.version += 1
 
             super(Resource, self).save(*args, **kwargs)
-            self.update_links()
+            if kwargs.pop('update_links', True):
+                self.update_links()
             self.update_identifiers()
 
             if cascade:
