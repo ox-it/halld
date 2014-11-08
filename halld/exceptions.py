@@ -302,7 +302,7 @@ class Forbidden(HALLDException):
     status_code = http.client.FORBIDDEN
 
     def __init__(self, user):
-        if not user.is_authenticated:
+        if not user.is_authenticated():
             self.name = 'unauthorized'
             self.description = 'You need to authenticate to do that.'
             self.status_code = http.client.UNAUTHORIZED
