@@ -1,6 +1,19 @@
+import collections
+
 import jsonpointer
 
 class Data(dict):
+    class IdentifierDict(collections.defaultdict):
+        def __init__(self, stable):
+            self._stable = stable
+        def __missing__(self, key):
+            return self._stable[key]
+        def keys(self):
+            return iter(set(super(Data.IdentifierDict, self).keys() | set(self._stable)))
+
+    def __init__(self, *args, **kwargs):
+        self['stableIdentifier'] = {}
+        self['identifier'] = self.IdentifierDict(self['stableIdentifier'])
     def set(self, ptr, value):
         if not isinstance(ptr, jsonpointer.JsonPointer):
             ptr = jsonpointer.JsonPointer(ptr)

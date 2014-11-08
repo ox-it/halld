@@ -254,17 +254,15 @@ class Resource(models.Model, StaleFieldsMixin):
         ])
 
     def collect_identifiers(self, data):
-        identifiers, stable_identifiers = {}, {}
-        stable_identifiers.update(self.get_type().get_identifiers(self, data))
-        stable_identifiers[self.type_id] = self.identifier
+        data['stableIdentifier'].update(self.get_type().get_identifiers(self, data))
+        data['stableIdentifier'][self.type_id] = self.identifier
         for source in self.cached_source_set:
             if isinstance(source.data.get('identifier'), str):
-                stable_identifiers['source:{}'.format(source.type_id)] = source.data['identifier']
+                data['stableIdentifier']['source:{}'.format(source.type_id)] = source.data['identifier']
         # Don't copy type name identifiers
         for resource_type in get_resource_types().values():
             if resource_type.name != self.type_id:
-                stable_identifiers.pop(resource_type.name, None)
-        data['stableIdentifier'].update(stable_identifiers)
+                data['stableIdentifier'].pop(resource_type.name, None)
         data['stableIdentifier']['uri'] = self.get_absolute_uri(data)
 
     def update_identifiers(self):
