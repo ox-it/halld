@@ -170,7 +170,7 @@ class SourceUpdater(object):
                 logger.debug("Saving resource %d of %d for user %s",
                              i, len(resources), self.committer.username)
             with save_wrapper():
-                resource.save(regenerate=False, force_update=True)
+                resource.save(regenerate=False, update_links=False, force_update=True)
 
         if errors:
             if self.error_handling == 'ignore':
