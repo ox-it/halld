@@ -14,6 +14,8 @@ class Data(dict):
     def __init__(self, *args, **kwargs):
         self['stableIdentifier'] = {}
         self['identifier'] = self.IdentifierDict(self['stableIdentifier'])
+        super(Data, self).__init__(*args, **kwargs)
+
     def set(self, ptr, value):
         if not isinstance(ptr, jsonpointer.JsonPointer):
             ptr = jsonpointer.JsonPointer(ptr)
