@@ -88,7 +88,7 @@ class SourceUpdater(object):
         if missing_source_types:
             raise exceptions.NoSuchSourceType(missing_source_types)
 
-        resources = {r.href: r for r in self.object_cache.resource.get_many(resource_hrefs, ignore_missing=True)}
+        resources = {r.href: r for r in self.object_cache.resource.get_many(resource_hrefs, ignore_missing=True) if r}
         missing_hrefs = resource_hrefs - set(resources)
         if missing_hrefs:
             raise exceptions.SourceDataWithoutResource(missing_hrefs)
