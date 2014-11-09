@@ -3,17 +3,19 @@ import collections
 import jsonpointer
 
 class Data(dict):
-    class IdentifierDict(collections.defaultdict):
-        def __init__(self, stable):
-            self._stable = stable
-        def __missing__(self, key):
-            return self._stable[key]
-        def keys(self):
-            return iter(set(super(Data.IdentifierDict, self).keys() | set(self._stable)))
+    class StableIdentifierDict(dict):
+        def __init__(self, other={}):
+            self._other = other
+        def __setitem__(self, key, value):
+            self._other[key] = value
+            super().__setitem__(key, value)
+        def update(self, *args, **kwargs):
+            self._other.update(*args, **kwargs)
+            super().update(*args, **kwargs)
 
     def __init__(self, *args, **kwargs):
-        self['stableIdentifier'] = {}
-        self['identifier'] = self.IdentifierDict(self['stableIdentifier'])
+        self['identifier'] = {}
+        self['stableIdentifier'] = Data.StableIdentifierDict(self['identifier'])
         super(Data, self).__init__(*args, **kwargs)
 
     def set(self, ptr, value):

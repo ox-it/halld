@@ -1,4 +1,5 @@
 from .changeset import *
+from .data import *
 from .extant import *
 from .files import *
 from .hal import *
