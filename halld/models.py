@@ -83,12 +83,15 @@ class Resource(models.Model, StaleFieldsMixin):
 
     @property
     def cached_source_set(self):
-        if not hasattr(self, '_cached_source_set'):
-            self._cached_source_set = set(self.source_set.all())
+        if not hasattr(self, '_cached_source_set') or self._cached_source_set is None:
+            self._cached_source_set = set(self.source_set.filter(deleted=False))
         return self._cached_source_set
     @cached_source_set.setter
     def cached_source_set(self, value):
         self._cached_source_set = set(value)
+    @cached_source_set.deleter
+    def cached_source_set(self):
+        self._cached_source_set = None
 
     def collect_data(self):
         data = Data()
