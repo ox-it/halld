@@ -3,7 +3,7 @@ import json
 import itertools
 
 from django.conf import settings
-from django.http import HttpResponse
+from django.http import HttpResponse, QueryDict
 from django.views.generic.base import View
 from django_conneg.decorators import renderer
 from django_conneg.views import ContentNegotiatedView
@@ -30,6 +30,18 @@ class ObjectCacheView(View):
 class HALLDView(ContentNegotiatedView, ObjectCacheView, metaclass=abc.ABCMeta):
     _default_format = 'hal'
     _include_renderer_details_in_context = False
+
+    def url_param_replace(self, **kwargs):
+        query = QueryDict(self.request.META['QUERY_STRING'], mutable=True)
+        for key, value in kwargs.items():
+            if not key:
+                query.pop(key, None)
+            else:
+                query[key] = value
+        if query:
+            return self.request.path_info + '?' + query.urlencode('{}')
+        else:
+            return self.request.path_info
 
     @renderer(format='jsonld', mimetypes=('application/ld+json',), name='JSON-LD')
     def render_jsonld(self, request, context, template_name):

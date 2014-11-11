@@ -52,8 +52,8 @@ class ResourceListView(HALLDView):
         hal.update({
             '@id': '',
             '_links': {
-                'first': {'href': '?page=1'},
-                'last': {'href': '?page={0}'.format(paginator.num_pages)},
+                'first': {'href': self.url_param_replace(page=1)},
+                'last': {'href': self.url_param_replace(page=paginator.num_pages)},
                 'find': {'href': reverse('halld:resource-list', args=[resource_type.name]) + '/{identifier}',
                          'templated': True},
                 'findSource': {'href': reverse('halld:resource-list', args=[resource_type.name]) + '/{identifier}/source/{source}',
@@ -63,10 +63,18 @@ class ResourceListView(HALLDView):
             },
             '_embedded': {'item': [self.object_cache.resource.get_hal(resource.href) for resource in page.object_list]},
         })
+        if self.exclude_extant:
+            hal['_links']['includeExtant'] = {'href': self.url_param_replace(extant=None)}
+        else:
+            hal['_links']['excludeExtant'] = {'href': self.url_param_replace(extant='off')}
+        if self.exclude_defunct:
+            hal['_links']['includeDefunct'] = {'href': self.url_param_replace(extant='on')}
+        else:
+            hal['_links']['excludeDefunct'] = {'href': self.url_param_replace(extant=None)}
         if page.number > 1:
-            hal['_links']['previous'] = {'href': '?page={0}'.format(page.number - 1)}
+            hal['_links']['previous'] = {'href': self.url_param_replace(page=page.number-1)}
         if page.number < paginator.num_pages:
-            hal['_links']['next'] = {'href': '?page={0}'.format(page.number + 1)}
+            hal['_links']['next'] = {'href': self.url_param_replace(page=page.number+1)}
         return hal
 
     @transaction.atomic
