@@ -404,12 +404,7 @@ class Source(models.Model, StaleFieldsMixin):
 
         if 'deleted' in changed_values:
             if self.deleted:
-                self.data = {}
-                self.version += 1
-                self.modified = now()
-                super(Source, self).save(*args, **kwargs)
-                signals.source_deleted.send(self)
-                return
+                changed_values['data'], self.data = self.data, {}
             elif not self.deleted:
                 # Special-case resurrecting old Sources
                 created = True
@@ -422,9 +417,12 @@ class Source(models.Model, StaleFieldsMixin):
             super(Source, self).save(*args, **kwargs)
             if created:
                 signals.source_created.send(self)
+            elif 'deleted' in changed_values:
+                signals.source_deleted.send(self)
             else:
                 signals.source_changed.send(self, old_data=changed_values['data'])
             if cascade_to_resource:
+                del self.resource.cached_source_set
                 self.resource.save()
         elif self.is_stale:
             super(Source, self).save(*args, **kwargs)
