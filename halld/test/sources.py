@@ -239,6 +239,31 @@ class SourceListViewTestCase(TestCase):
         self.assertEqual(science_source.version, 2)
         self.assertEqual(science_source.deleted, True)
 
+class SourceTestCase(TestCase):
+    def testResourceBecomesExtant(self):
+        resource = models.Resource.create(self.superuser, 'snake')
+        self.assertEqual(resource.extant, False)
+        source = models.Source(resource=resource,
+                               type_id='science',
+                               author=self.superuser,
+                               committer=self.superuser,
+                               data={'foo': 'bar'})
+        source.save()
+        self.assertEqual(resource.extant, True)
+        self.assertEqual(resource.data.get('foo'), 'bar')
+
+    def testResourceBecomesDefunct(self):
+        resource = models.Resource.create(self.superuser, 'snake')
+        source = models.Source(resource=resource,
+                               type_id='science',
+                               author=self.superuser,
+                               committer=self.superuser,
+                               data={'foo': 'bar'})
+        source.save()
+        source.deleted = True
+        source.save()
+        self.assertEqual(resource.extant, False)
+
 class AtomicTestCase(TestCase):
     def testDuplicatedIdentifier(self):
         resource = models.Resource.objects.create(type_id='snake', identifier='python', creator=self.superuser)

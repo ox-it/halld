@@ -11,10 +11,11 @@ class ResourceListTestCase(TestCase):
         self.defunct_resource = models.Resource.create(self.superuser, 'snake')
         self.extant_resource = models.Resource.create(self.superuser, 'snake')
         models.Source.objects.create(resource=self.extant_resource,
-                                     type_id='snake',
+                                     type_id='science',
                                      data={'foo': 'bar'},
                                      author=self.superuser,
                                      committer=self.superuser)
+        self.assertEqual(self.extant_resource.extant, True)
 
     def testGetResourceList(self):
         request = self.factory.get('/snake')
@@ -22,7 +23,6 @@ class ResourceListTestCase(TestCase):
         response = self.resource_list_view(request, 'snake')
         data = json.loads(response.content.decode())
 
-    @unittest.expectedFailure
     def testDefunctResources(self):
         self.create_resources()
         request = self.factory.get('/snake?defunct=on&extant=off')
@@ -33,7 +33,6 @@ class ResourceListTestCase(TestCase):
         self.assertEqual(data['_embedded']['item'][0]['_links']['self']['href'],
                          self.defunct_resource.href)
 
-    @unittest.expectedFailure
     def testExtantResources(self):
         self.create_resources()
         request = self.factory.get('/snake')
