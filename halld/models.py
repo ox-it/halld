@@ -342,6 +342,8 @@ class Resource(models.Model, StaleFieldsMixin):
     class Meta:
         index_together = [
             ['type', 'identifier'],
+            ['type', 'extant'],
+            ['type', 'identifier', 'extant'],
         ]
         ordering = ('type', 'identifier')
 
