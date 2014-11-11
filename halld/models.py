@@ -405,12 +405,7 @@ class Source(models.Model, StaleFieldsMixin):
 
         if 'deleted' in changed_values:
             if self.deleted:
-                old_data, self.data = self.data, {}
-                self.version += 1
-                self.modified = now()
-                super(Source, self).save(*args, **kwargs)
-                signals.source_deleted.send(self, old_data=old_data)
-                return
+                changed_values['data'], self.data = self.data, {}
             elif not self.deleted:
                 # Special-case resurrecting old Sources
                 created = True
