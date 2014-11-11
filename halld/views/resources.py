@@ -22,10 +22,17 @@ class ResourceListView(HALLDView):
             resource_type = get_resource_type(resource_type)
         except KeyError:
             raise Http404
+        self.exclude_extant = request.GET.get('extant', 'on') == 'off'
+        self.exclude_defunct = request.GET.get('defunct', 'off') == 'off'
         return super(ResourceListView, self).dispatch(request, resource_type, **kwargs)
 
     def get(self, request, resource_type):
-        paginator = Paginator(Resource.objects.filter(type_id=resource_type.name), 100)
+        resources = Resource.objects.filter(type_id=resource_type.name)
+        if self.exclude_extant:
+            resources = resources.filter(extant=False)
+        if self.exclude_defunct:
+            resources = resources.filter(extant=True)
+        paginator = Paginator(resources, 100)
         try:
             page_num = int(request.GET.get('page'))
         except:
@@ -83,12 +90,7 @@ class ResourceDetailView(HALLDView):
         self.context['resource'] = resource
         self.context['resource_type'] = resource_type
         if resource.deleted:
-            raise Http404
-        elif not resource.extant:
-            self.context['status_code'] = http.client.GONE
-            
-        #if resource.moved_to:
-        #    return HttpResponsePermanentRedirect(resource.moved_to.get_absolute_url())
+            raise exceptions.DeletedResource()
         return self.render()
 
     @transaction.atomic

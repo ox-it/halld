@@ -179,6 +179,11 @@ class Resource(models.Model, StaleFieldsMixin):
         self.uri = self.data['@id']
         self.deleted = bool(self.data.get('@deleted', False))
         self.extant = bool(self.data.get('@extant', True))
+
+        # Resources without sources don't exist (yet)
+        if not self.cached_source_set:
+            self.extant = False
+
         if '@startDate' in self.data:
             self.start_date = localize(self.data['@startDate'])
             if self.start_date > now():
