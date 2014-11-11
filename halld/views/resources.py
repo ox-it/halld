@@ -68,9 +68,9 @@ class ResourceListView(HALLDView):
         else:
             hal['_links']['excludeExtant'] = {'href': self.url_param_replace(extant='off')}
         if self.exclude_defunct:
-            hal['_links']['includeDefunct'] = {'href': self.url_param_replace(extant='on')}
+            hal['_links']['includeDefunct'] = {'href': self.url_param_replace(defunct='on')}
         else:
-            hal['_links']['excludeDefunct'] = {'href': self.url_param_replace(extant=None)}
+            hal['_links']['excludeDefunct'] = {'href': self.url_param_replace(defunct=None)}
         if page.number > 1:
             hal['_links']['previous'] = {'href': self.url_param_replace(page=page.number-1)}
         if page.number < paginator.num_pages:
