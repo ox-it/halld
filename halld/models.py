@@ -66,7 +66,7 @@ class Resource(models.Model, StaleFieldsMixin):
 
     deleted = models.BooleanField(default=False)
 
-    creator = models.ForeignKey(User)
+    creator = models.ForeignKey(settings.AUTH_USER_MODEL)
     created = models.DateTimeField(null=True, blank=True)
     modified = models.DateTimeField(null=True, blank=True)
 
@@ -361,8 +361,8 @@ class Source(models.Model, StaleFieldsMixin):
     resource = models.ForeignKey(Resource)
     type = models.ForeignKey(SourceType)
 
-    author = models.ForeignKey(User, related_name='author_of_source')
-    committer = models.ForeignKey(User, related_name='committer_of_source')
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='author_of_source')
+    committer = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='committer_of_source')
 
     created = models.DateTimeField(auto_now_add=True)
     modified = models.DateTimeField(auto_now=True)
@@ -475,8 +475,8 @@ CHANGESET_STATE_CHOICES = (
 )
 
 class Changeset(models.Model):
-    author = models.ForeignKey(User, related_name='author_of_changeset')
-    committer = models.ForeignKey(User, null=True, blank=True, related_name='committer_of_changeset')
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='author_of_changeset')
+    committer = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, related_name='committer_of_changeset')
     version = models.PositiveIntegerField(default=0)
 
     base_href = models.TextField()
