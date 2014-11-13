@@ -154,10 +154,12 @@ class Resource(models.Model, StaleFieldsMixin):
             self.version += 1
 
             update_links = kwargs.pop('update_links', True)
+            update_identifiers = kwargs.pop('update_identifiers', True)
             super(Resource, self).save(*args, **kwargs)
             if update_links:
                 self.update_links()
-            self.update_identifiers()
+            if update_identifiers:
+                self.update_identifiers()
 
             if cascade:
                 cascade_set -= set(regeneration_path)

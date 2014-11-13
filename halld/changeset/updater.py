@@ -157,6 +157,7 @@ class SourceUpdater(object):
                                  len(cascade_set))
                 if resource.regenerate(cascade_set):
                     resource.update_links()
+                    resource.update_identifiers()
                     save_set.add(resource)
             if not cascade_set:
                 break
@@ -170,7 +171,7 @@ class SourceUpdater(object):
                 logger.debug("Saving resource %d of %d for user %s",
                              i, len(resources), self.committer.username)
             with save_wrapper():
-                resource.save(regenerate=False, update_links=False, force_update=True)
+                resource.save(regenerate=False, update_links=False, update_identifiers=False, force_update=True)
 
         if errors:
             if self.error_handling == 'ignore':
