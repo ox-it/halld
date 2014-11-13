@@ -8,6 +8,7 @@ jsonpatch
 jsonpointer
 jsonschema
 Markdown
+mock
 Pillow
 psycopg2
 python-dateutil
