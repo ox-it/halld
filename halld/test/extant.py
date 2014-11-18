@@ -44,11 +44,24 @@ class ExtantTestCase(TestCase):
 
     def testNoIdentifiersForNonExtantResources(self):
         r = Resource.objects.create(type_id='snake', identifier='python', creator=self.superuser)
-        r.generate_data = mock.Mock()
-        r.generate_data.return_value = {'@id': 'http://testserver/id/snake/python',
-                                        '@extant': False,
-                                        'identifier': {'foo': 'bar'}}
+        r.collect_data = mock.Mock()
+        r.collect_data.return_value = {'@id': 'http://testserver/id/snake/python',
+                                       '@extant': False,
+                                       'identifier': {'foo': 'bar'}}
         r.save()
+        r.collect_data.assert_called_once_with()
         self.assertEqual(Identifier.objects.filter(resource=r,
                                                    scheme='foo',
                                                    value='bar').count(), 0)
+
+    def testStableIdentifiersForNonExtantResources(self):
+        r = Resource.objects.create(type_id='snake', identifier='python', creator=self.superuser)
+        r.collect_data = mock.Mock()
+        r.collect_data.return_value = {'@id': 'http://testserver/id/snake/python',
+                                       '@extant': False,
+                                       'stableIdentifier': {'foo': 'bar'}}
+        r.save()
+        r.collect_data.assert_called_once_with()
+        self.assertEqual(Identifier.objects.filter(resource=r,
+                                                   scheme='foo',
+                                                   value='bar').count(), 1)
