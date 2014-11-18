@@ -3,6 +3,7 @@ import django.test
 
 from ..models import Changeset, Link, Identifier, Source, Resource
 from .. import views
+from ..util.cache import ObjectCache
 
 class TestCase(django.test.TestCase):
     def setUp(self):
@@ -11,6 +12,7 @@ class TestCase(django.test.TestCase):
                                                        email='superuser@example.com',
                                                        password='secret')
         self.anonymous_user = AnonymousUser
+        self.object_cache = ObjectCache(self.anonymous_user)
         self.changeset_list_view = views.ChangesetListView.as_view()
         self.index_view = views.IndexView.as_view()
         self.by_identifier_view = views.ByIdentifierView.as_view()

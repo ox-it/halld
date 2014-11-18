@@ -65,3 +65,37 @@ class ExtantTestCase(TestCase):
         self.assertEqual(Identifier.objects.filter(resource=r,
                                                    scheme='foo',
                                                    value='bar').count(), 1)
+
+class LinkTestCase(TestCase):
+    def perform_test(self, self_extant, other_extant, link_name, resultant_link_name):
+        r = Resource.objects.create(type_id='snake', identifier='python', creator=self.superuser)
+        s = Resource.objects.create(type_id='snake', identifier='cobra', creator=self.superuser)
+        r.collect_data = mock.Mock()
+        r.collect_data.return_value = {'@id': 'http://testserver/id/snake/python',
+                                       '@extant': other_extant}
+        r.save()
+        s.collect_data = mock.Mock()
+        s.collect_data.return_value = {'@id': 'http://testserver/id/snake/cobra',
+                                       '@extant': self_extant,
+                                       link_name: [{'href': 'http://testserver/snake/python'}]}
+        s.save()
+        s_hal = s.get_hal(self.anonymous_user, self.object_cache)
+        print(s_hal)
+        print(s.data)
+        self.assertEqual(s_hal['_links'].get(resultant_link_name),
+                         [{'href': r.href}])
+        if link_name != resultant_link_name:
+            self.assertEqual(s_hal['_links'].get(link_name), None)
+
+    def testSelfDefunctTimeless(self):
+        self.perform_test(False, True, 'timelessF', 'timelessF')
+    def testOtherDefunctTimeless(self):
+        self.perform_test(True, False, 'timelessF', 'timelessF')
+    def testSelfDefunct(self):
+        self.perform_test(False, True, 'eats', 'defunct:eats')
+    def testOtherDefunct(self):
+        self.perform_test(True, False, 'eats', 'defunct:eats')
+    def testBothExtant(self):
+        self.perform_test(True, True, 'eats', 'eats')
+    def testBothDefunct(self):
+        self.perform_test(False, False, 'eats', 'defunct:eats')

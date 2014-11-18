@@ -84,7 +84,6 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
         if not exclude_links:
             link_types = get_link_types()
             for link_type in link_types.values():
-                new_links = []
                 if not link_type.include:
                     continue
                 link_items = hal.pop(link_type.name, None)
@@ -99,15 +98,18 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
                         link_item.update(other_hal)
                     elif 'title' in other_hal:
                         link_item['title'] = other_hal['title']
-                    new_links.append(link_item)
-                if not new_links:
-                    continue
-                if link_type.functional:
-                    new_links = new_links[0]
-                if link_type.embed:
-                    embedded[link_type.name] = link_items
-                else:
-                    links[link_type.name] = link_items
+                    if link_type.functional:
+                        new_links = new_links[0]
+                    if link_type.timeless or hal['@extant'] and other_hal['@extant']:
+                        link_name = link_type.name
+                        functional = link_type.functional
+                    else:
+                        link_name = 'defunct:' + link_type.name
+                        functional = False
+                    if link_type.embed:
+                        embedded[link_type.name] = link_items
+                    else:
+                        links[link_type.name] = link_items
         hal['_links'] = links
         if embedded:
             hal['_embedded'] = embedded
