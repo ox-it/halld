@@ -1,4 +1,5 @@
 from django.contrib.auth.models import User, AnonymousUser
+from django.core.cache import cache
 import django.test
 
 from ..models import Changeset, Link, Identifier, Source, Resource
@@ -7,6 +8,7 @@ from ..util.cache import ObjectCache
 
 class TestCase(django.test.TestCase):
     def setUp(self):
+        cache.clear()
         self.factory = django.test.RequestFactory()
         self.superuser = User.objects.create_superuser(username='superuser',
                                                        email='superuser@example.com',

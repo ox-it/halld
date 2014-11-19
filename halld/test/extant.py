@@ -4,7 +4,7 @@ from django.contrib.auth.models import User
 import mock
 
 from .base import TestCase
-from ..models import Resource, Identifier, Link
+from ..models import Resource, Source, Identifier, Link
 
 class ExtantTestCase(TestCase):
     def testExtantFalse(self):
@@ -69,19 +69,15 @@ class ExtantTestCase(TestCase):
 class LinkTestCase(TestCase):
     def perform_test(self, self_extant, other_extant, link_name, resultant_link_name):
         r = Resource.objects.create(type_id='snake', identifier='python', creator=self.superuser)
+        Source.objects.create(resource=r, type_id='science',
+                              author=self.superuser, committer=self.superuser,
+                              data={'@extant': other_extant})
         s = Resource.objects.create(type_id='snake', identifier='cobra', creator=self.superuser)
-        r.collect_data = mock.Mock()
-        r.collect_data.return_value = {'@id': 'http://testserver/id/snake/python',
-                                       '@extant': other_extant}
-        r.save()
-        s.collect_data = mock.Mock()
-        s.collect_data.return_value = {'@id': 'http://testserver/id/snake/cobra',
-                                       '@extant': self_extant,
-                                       link_name: [{'href': 'http://testserver/snake/python'}]}
-        s.save()
+        Source.objects.create(resource=s, type_id='science',
+                              author=self.superuser, committer=self.superuser,
+                              data={'@extant': self_extant,
+                                    link_name: [{'href': 'http://testserver/snake/python'}]})
         s_hal = s.get_hal(self.anonymous_user, self.object_cache)
-        print(s_hal)
-        print(s.data)
         self.assertEqual(s_hal['_links'].get(resultant_link_name),
                          [{'href': r.href}])
         if link_name != resultant_link_name:

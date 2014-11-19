@@ -86,10 +86,9 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
             for link_type in link_types.values():
                 if not link_type.include:
                     continue
-                link_items = hal.pop(link_type.name, None)
-                if not link_items:
-                    continue
-                for link_item in link_items:
+                for link_item in hal.pop(link_type.name, []):
+                    if not link_item:
+                        continue
                     try:
                         other_hal = object_cache.resource.get_hal(link_item['href'], exclude_links=True)
                     except (exceptions.NoSuchResource, PermissionDenied):
@@ -98,18 +97,22 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
                         link_item.update(other_hal)
                     elif 'title' in other_hal:
                         link_item['title'] = other_hal['title']
-                    if link_type.functional:
-                        new_links = new_links[0]
-                    if link_type.timeless or hal['@extant'] and other_hal['@extant']:
+
+                    if link_type.timeless or (hal['@extant'] and other_hal['@extant']):
                         link_name = link_type.name
                         functional = link_type.functional
                     else:
                         link_name = 'defunct:' + link_type.name
                         functional = False
-                    if link_type.embed:
-                        embedded[link_type.name] = link_items
+
+                    target = embedded if link_type.embed else links
+
+                    if functional:
+                        target[link_name] = link_item
                     else:
-                        links[link_type.name] = link_items
+                        if link_name not in target:
+                            target[link_name] = []
+                        target[link_name].append(link_item)
         hal['_links'] = links
         if embedded:
             hal['_embedded'] = embedded
