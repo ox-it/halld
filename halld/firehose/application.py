@@ -103,23 +103,12 @@ def application(environ, start_response):
     return body
 
 def initialize():
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> origin/firehose
     # Patching thread makes Django's database connection wrapper get upset
     # about turning up in threads it wasn't expecting.
     monkey.patch_all(socket=True, dns=True, time=True, select=True,
                      thread=False, os=True, ssl=True, httplib=False,
                      aggressive=True)
     # For some reason this is missing, but expected, in Py3.3
-<<<<<<< HEAD
-=======
-    monkey.patch_all(socket=True, dns=True, time=True, select=True,thread=False, os=True, ssl=True, httplib=False, aggressive=True)
-    # For some reason this is missing, but expected in Py3.3
->>>>>>> A working firehose
-=======
->>>>>>> origin/firehose
     if not hasattr(http.client, '_MAXHEADERS'):
         http.client._MAXHEADERS = 100
 
