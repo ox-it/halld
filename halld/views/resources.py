@@ -10,16 +10,15 @@ from django_conneg.decorators import renderer
 from django_conneg.http import HttpResponseCreated
 
 from .base import HALLDView
-from .. import exceptions
+from .. import exceptions, get_halld_config
 from ..models import Resource
-from ..registry import get_resource_type
 
 __all__ = ['ResourceListView', 'ResourceDetailView']
 
 class ResourceListView(HALLDView):
     def dispatch(self, request, resource_type, **kwargs):
         try:
-            resource_type = get_resource_type(resource_type)
+            resource_type = get_halld_config().resource_types[resource_type]
         except KeyError:
             raise Http404
         self.exclude_extant = request.GET.get('extant', 'on') == 'off'
@@ -85,7 +84,7 @@ class ResourceListView(HALLDView):
 class ResourceDetailView(HALLDView):
     def dispatch(self, request, resource_type, identifier, **kwargs):
         try:
-            resource_type = get_resource_type(resource_type)
+            resource_type = get_halld_config().resource_types[resource_type]
         except KeyError:
             raise exceptions.NoSuchResourceType(resource_type)
         if not resource_type.is_valid_identifier(identifier):

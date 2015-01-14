@@ -23,7 +23,7 @@ class SourceTypeDefinition(object, metaclass=abc.ABCMeta):
                            (cls,),
                            {'name': name,
                             'contributed_types': contributed_types})
-        return source_type()
+        return source_type
 
     def get_inferences(self):
         return []
@@ -72,7 +72,7 @@ class SchemaValidatedSourceTypeDefinition(SourceTypeDefinition):
                            {'name': name,
                             'contributed_types': contributed_types,
                             'schema': schema})
-        return source_type()
+        return source_type
 
     @property
     def _schema(self):
@@ -98,20 +98,3 @@ class SchemaValidatedSourceTypeDefinition(SourceTypeDefinition):
             raise exceptions.SchemaValidationError(e)
         super(SchemaValidatedSourceTypeDefinition, self).validate_data(source, data)
 
-_local = threading.local()
-def get_source_types():
-    try:
-        return _local.source_types
-    except AttributeError:
-        from django.conf import settings
-        source_types = {}
-        for source_type in settings.SOURCE_TYPES:
-            if isinstance(source_type, str):
-                mod_name, attr_name = source_type.rsplit('.', 1)
-                source_type = getattr(importlib.import_module(mod_name), attr_name)()
-            source_types[source_type.name] = source_type
-        _local.source_types = source_types
-        return source_types
-
-def get_source_type(name):
-    return get_source_types()[name]

@@ -1,8 +1,8 @@
 from django.core.urlresolvers import reverse
 from django_conneg.views import HTMLView
 
+from .. import get_halld_config
 from .base import HALLDView
-from ..registry import get_resource_types
 
 __all__ = ['IndexView']
 
@@ -30,11 +30,11 @@ class IndexView(HALLDView, HTMLView):
         hal['_links'].update({
             'items:{}'.format(resource_type.name): {
                 'href': reverse('halld:resource-list', args=[resource_type.name])}
-            for resource_type in get_resource_types().values()
+            for resource_type in get_halld_config().resource_types.values()
         })
         hal['_links'].update({
             'type:{}'.format(resource_type.name): {
                 'href': reverse('halld:resource-type-detail', args=[resource_type.name])}
-            for resource_type in get_resource_types().values()
+            for resource_type in get_halld_config().resource_types.values()
         })
         return hal

@@ -1,6 +1,6 @@
-from halld.files.registry import FileResourceTypeDefinition
+from halld.files.definitions import FileResourceTypeDefinition
 from halld.inference import FirstOf
-from halld.registry import ResourceTypeDefinition
+from halld.definitions import ResourceTypeDefinition
 
 class SnakeResourceTypeDefinition(ResourceTypeDefinition):
     name = 'snake'

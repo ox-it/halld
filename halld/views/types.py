@@ -1,7 +1,7 @@
 from django.http import Http404
 
+from .. import get_halld_config
 from .base import HALLDView
-from ..registry import get_resource_type, get_resource_types
 
 __all__ = ['ResourceTypeListView', 'ResourceTypeDetailView']
 
@@ -17,7 +17,7 @@ class ResourceTypeView(HALLDView):
 
 class ResourceTypeListView(ResourceTypeView):
     def get(self, request, *args, **kwargs):
-        self.context['resource_types'] = get_resource_types().values()
+        self.context['resource_types'] = get_halld_config().resource_types
         return self.render()
 
     def hal_json_from_context(self, request, context):
@@ -25,7 +25,7 @@ class ResourceTypeListView(ResourceTypeView):
             '@id': '',
             '_embedded': {
                 'item': [self.resource_type_as_hal(resource_type)
-                         for resource_type in context['resource_types']]
+                         for resource_type in context['resource_types'].values()]
             }
         }
         return hal
@@ -33,7 +33,7 @@ class ResourceTypeListView(ResourceTypeView):
 class ResourceTypeDetailView(ResourceTypeView):
     def dispatch(self, request, resource_type, **kwargs):
         try:
-            resource_type = get_resource_type(resource_type)
+            resource_type = get_halld_config().resource_types[resource_type]
         except KeyError:
             raise Http404
         return super(ResourceTypeDetailView, self).dispatch(request, resource_type, **kwargs)

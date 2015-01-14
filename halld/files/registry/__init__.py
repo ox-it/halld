@@ -1,2 +1,2 @@
-from .resources import FileResourceTypeDefinition
-from .sources import FileMetadataSourceTypeDefinition
+from halld.files.definitions.resources import FileResourceTypeDefinition
+from halld.files.definitions.sources import FileMetadataSourceTypeDefinition

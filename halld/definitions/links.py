@@ -2,6 +2,8 @@ import abc
 import importlib
 import threading
 
+from django.apps import apps
+
 class LinkTypeDefinition(object, metaclass=abc.ABCMeta):
     @abc.abstractproperty
     def name(self):
@@ -44,7 +46,7 @@ class LinkTypeDefinition(object, metaclass=abc.ABCMeta):
                      'inverted': inverted,
                      'strict': strict,
                      'timeless': timeless})
-        return link()
+        return link
 
     def inverse(self):
         return LinkTypeDefinition.new(self.inverse_name, self.name,
@@ -52,23 +54,5 @@ class LinkTypeDefinition(object, metaclass=abc.ABCMeta):
                                       self.inverse_include, self.include,
                                       self.inverse_embed, self.embed,
                                       self.inverse_subresource, self.subresource,
-                                      not self.inverted, self.strict, self.timeless)
+                                      not self.inverted, self.strict, self.timeless)()
 
-_local = threading.local()
-def get_link_types():
-    try:
-        return _local.links
-    except AttributeError:
-        from django.conf import settings
-        link_types = {}
-        for link_type in settings.LINK_TYPES:
-            if isinstance(link_type, str):
-                mod_name, attr_name = link_types.rsplit('.', 1)
-                link_type = getattr(importlib.import_module(mod_name), attr_name)()
-            for link_type in [link_type, link_type.inverse()]:
-                link_types[link_type.name] = link_type
-        _local.links = link_types
-        return link_types
-
-def get_link_type(name):
-    return get_link_types()[name]

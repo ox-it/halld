@@ -1,18 +1,18 @@
 from django.db.models.signals import post_syncdb
 
 import halld.models
-from halld.registry import get_link_types, get_resource_types, get_source_types
+from halld import get_halld_config
 
-def register_registry_types(sender, **kwargs):
+def register_type_definitions(sender, **kwargs):
     """
     Adds records to the ResourceType, LinkType, SourceType models
-    from the definitions in the halld.registry.
+    from the definitions in the halld.definitions.
     """
-    for link_type in get_link_types():
-        halld.models.LinkType.objects.get_or_create(name=link_type)
-    for resource_type in get_resource_types():
-        halld.models.ResourceType.objects.get_or_create(name=resource_type)
-    for source_type in get_source_types():
-        halld.models.SourceType.objects.get_or_create(name=source_type)
+    for link_type in get_halld_config().link_types.values():
+        halld.models.LinkType.objects.get_or_create(name=link_type.name)
+    for resource_type in get_halld_config().resource_types.values():
+        halld.models.ResourceType.objects.get_or_create(name=resource_type.name)
+    for source_type in get_halld_config().source_types.values():
+        halld.models.SourceType.objects.get_or_create(name=source_type.name)
 
-post_syncdb.connect(register_registry_types, sender=halld.models)
+post_syncdb.connect(register_type_definitions, sender=halld.models)

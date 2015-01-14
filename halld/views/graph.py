@@ -12,7 +12,6 @@ except ImportError:
 from .base import HALLDView
 from .. import exceptions
 from ..models import Resource
-from ..registry import get_link_type
 
 __all__ = ['GraphView']
 

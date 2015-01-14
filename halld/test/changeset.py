@@ -4,7 +4,7 @@ import json
 from .. import exceptions
 from .base import TestCase
 
-from ..test_site.registry import SnakeResourceTypeDefinition
+from ..test_site.definitions import SnakeResourceTypeDefinition
 
 class ChangesetTestCase(TestCase):
     def testAddingUnsupportedSource(self):

@@ -1,11 +1,8 @@
 import abc
 
-from ...inference import FirstOf
-from ...registry import SourceTypeDefinition
+from halld.definitions import SourceTypeDefinition
 
 class FileMetadataSourceTypeDefinition(SourceTypeDefinition):
-    name = 'file-metadata'
-
     @abc.abstractmethod
     def get_metadata(self, fp):
         return {}

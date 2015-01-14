@@ -12,9 +12,8 @@ from django_conneg.http import HttpBadRequest, HttpGone
 from django_conneg.views import JSONView
 
 from .mixins import VersioningMixin
-from .. import exceptions
+from .. import exceptions, get_halld_config
 from ..models import Source, Resource, Changeset
-from ..registry import get_resource_type, get_source_type
 from .changeset import ChangesetView
 
 __all__ = ['SourceListView', 'SourceDetailView']
@@ -27,7 +26,7 @@ class BulkSourceUpdateView(ChangesetView):
 class SourceListView(ChangesetView):
     def dispatch(self, request, resource_type, identifier, **kwargs):
         try:
-            resource_type = get_resource_type(resource_type)
+            resource_type = get_halld_config().resource_types[resource_type]
         except KeyError:
             raise exceptions.NoSuchResourceType(resource_type)
         resource_href = resource_type.base_url + identifier
@@ -94,7 +93,7 @@ class SourceDetailView(VersioningMixin, ChangesetView):
     def put(self, request, resource_type, identifier, source_type, **kwargs):
         hal = self.get_request_json('application/hal+json')
         try:
-            data = get_source_type(source_type).data_from_hal(hal)
+            data = get_halld_config().source_types[source_type].data_from_hal(hal)
         except KeyError:
             raise exceptions.NoSuchSourceType(source_type)
 

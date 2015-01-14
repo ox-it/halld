@@ -6,10 +6,10 @@ import urllib.parse
 import uuid
 import importlib
 
+from django.apps import apps
 from django.core.exceptions import PermissionDenied
 
-from .links import get_link_type, get_link_types
-from .sources import get_source_type
+from .. import get_halld_config
 from .. import exceptions
 
 uuid_re = re.compile('^[0-9a-f]{32}$')
@@ -49,7 +49,7 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
         inferences = []
         if self.source_types is not None:
             for source_type in self.source_types:
-                source_type = get_source_type(source_type)
+                source_type = get_halld_config().source_types[source_type]
                 inferences.extend(source_type.get_inferences())
         return inferences
 
@@ -82,8 +82,8 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
         links['self'] = {'href': resource.href}
 
         if not exclude_links:
-            link_types = get_link_types()
-            for link_type in link_types.values():
+            app_config = get_halld_config()
+            for link_type in app_config.link_types.values():
                 if not link_type.include:
                     continue
                 for link_item in hal.pop(link_type.name, []):
@@ -146,7 +146,7 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
         """
         Makes sure that each link is a list of dicts, each with a href.
         """
-        for link_type in get_link_types().values():
+        for link_type in get_halld_config().link_types.values():
             link_data = data.pop(link_type.name, None)
             if not link_data:
                 continue
@@ -169,7 +169,7 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
     def add_inbound_links(self, resource, data):
         from ..models import Link
         for link in Link.objects.filter(target_href=resource.href):
-            link_type = get_link_type(link.type_id).inverse()
+            link_type = get_halld_config().link_types[link.type_id].inverse()
             link_dict = {'href': link.source_id,
                          'inbound': True}
             if link_type.name in data:
@@ -178,7 +178,7 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
                 data[link_type.name] = [link_dict]
 
     def sort_links(self, resource, data):
-        for link_type in get_link_types().values():
+        for link_type in get_halld_config().link_types.values():
             try:
                 links = data[link_type.name]
             except KeyError:
@@ -193,30 +193,3 @@ class DefaultFilteredResourceTypeDefinition(ResourceTypeDefinition):
     def filter_data(self, user, source, data):
         return {}
 
-_local = threading.local()
-def get_resource_types():
-    try:
-        return _local.resource_types
-    except AttributeError:
-        from django.conf import settings
-        resource_types, resource_types_by_href = {}, {}
-        for resource_type in settings.RESOURCE_TYPES:
-            if isinstance(resource_type, str):
-                mod_name, attr_name = resource_type.rsplit('.', 1)
-                resource_type = getattr(importlib.import_module(mod_name), attr_name)()
-            resource_types[resource_type.name] = resource_type
-            resource_types_by_href[resource_type.href] = resource_type
-        _local.resource_types = resource_types
-        _local.resource_types_by_href = resource_types_by_href
-        return resource_types
-
-def get_resource_type(name):
-    return get_resource_types()[name]
-
-def get_resource_types_by_href():
-    get_resource_types()
-    return _local.resource_types_by_href
-
-def get_resource_type_by_href(href):
-    get_resource_types()
-    return _local.resource_types_by_href[href]

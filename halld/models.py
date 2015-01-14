@@ -16,10 +16,9 @@ import ujson as json
 import dateutil.parser
 from stalefields.stalefields import StaleFieldsMixin
 
+from . import get_halld_config
+from .definitions import ResourceTypeDefinition
 from . import signals, exceptions
-from .registry import get_link_types, get_link_type
-from .registry import ResourceTypeDefinition, get_resource_types, get_resource_type
-from .registry import get_source_type
 from .conf import is_spatial_backend
 from .data import Data
 
@@ -225,7 +224,7 @@ class Resource(models.Model, StaleFieldsMixin):
         return self.get_type().get_normalizations()
 
     def get_type(self):
-        return get_resource_type(self.type_id)
+        return get_halld_config().resource_types[self.type_id]
 
     def get_hal(self, user, object_cache, data=None, exclude_links=False):
         return self.get_type().get_hal(user, self, object_cache, data or self.data, exclude_links)
@@ -238,7 +237,7 @@ class Resource(models.Model, StaleFieldsMixin):
 
     def get_link_hrefs(self, data):
         link_hrefs = set()
-        for link_type in get_link_types().values():
+        for link_type in get_halld_config().link_types.values():
             for link in data.get(link_type.name, ()):
                 link_hrefs.add(link['href'])
         return link_hrefs
@@ -251,7 +250,7 @@ class Resource(models.Model, StaleFieldsMixin):
             super(Resource, self).save()
 
         link_data = set()
-        for link_type in get_link_types().values():
+        for link_type in get_halld_config().link_types.values():
             links = self.data.get(link_type.name, ())
             for link in links:
                 if link.get('inbound'):
@@ -271,7 +270,7 @@ class Resource(models.Model, StaleFieldsMixin):
             if isinstance(source.data.get('identifier'), str):
                 data['stableIdentifier']['source:{}'.format(source.type_id)] = source.data['identifier']
         # Don't copy type name identifiers
-        for resource_type in get_resource_types().values():
+        for resource_type in get_halld_config().resource_types.values():
             if resource_type.name != self.type_id:
                 data['stableIdentifier'].pop(resource_type.name, None)
         data['stableIdentifier']['uri'] = self.get_absolute_uri(data)
@@ -324,7 +323,7 @@ class Resource(models.Model, StaleFieldsMixin):
     @classmethod
     def create(cls, creator, resource_type, identifier=None):
         if not isinstance(resource_type, ResourceTypeDefinition):
-            resource_type = get_resource_type(resource_type)
+            resource_type = get_halld_config().resource_types[resource_type]
         if not resource_type.user_can_create(creator):
             raise exceptions.Forbidden(creator)
         if not identifier:
@@ -395,7 +394,7 @@ class Source(models.Model, StaleFieldsMixin):
         return reverse('halld:source-detail', args=[self.resource.type, self.resource.identifier, self.type_id])
 
     def get_type(self):
-        return get_source_type(self.type_id)
+        return get_halld_config().source_types[self.type_id]
 
     def save(self, *args, **kwargs):
         created = not self.pk

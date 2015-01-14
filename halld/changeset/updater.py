@@ -11,10 +11,10 @@ import jsonschema
 
 from .schema import schema
 from . import methods
-from ..registry import get_source_types, get_source_type
 from ..util.cache import ObjectCache
 from .. import exceptions
 from .. import models
+from .. import get_halld_config
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +84,7 @@ class SourceUpdater(object):
         resource_hrefs = set(update['resourceHref'] for update in updates)
         source_types = set(update['sourceType'] for update in updates)
 
-        missing_source_types = source_types - set(get_source_types())
+        missing_source_types = source_types - set(get_halld_config().source_types)
         if missing_source_types:
             raise exceptions.NoSuchSourceType(missing_source_types)
 

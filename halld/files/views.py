@@ -12,11 +12,11 @@ from django.utils.decorators import method_decorator
 from django.views.generic import View
 from django_conneg.http import HttpResponseCreated
 
+from .. import get_halld_config
 from ..models import Resource
 import halld.exceptions
-from ..registry.resources import get_resource_type, get_source_type
 from ..changeset import SourceUpdater
-from .registry import FileResourceTypeDefinition, FileMetadataSourceTypeDefinition
+from .definitions import FileResourceTypeDefinition, FileMetadataSourceTypeDefinition
 from . import conf
 from . import exceptions
 from .forms import UploadFileForm
@@ -59,7 +59,7 @@ class FileView(View):
 
     def update_file_metadata(self, request, resource_file):
         source_types = resource_file.resource.get_type().source_types
-        source_types = (get_source_type(source_type) for source_type in source_types)
+        source_types = (get_halld_config().source_types[source_type] for source_type in source_types)
         source_types = [source_type for source_type in source_types
                         if isinstance(source_type, FileMetadataSourceTypeDefinition)]
         if not source_types:
@@ -123,7 +123,7 @@ class FileResourceDetailView(ResourceDetailView):
 class FileDetailView(FileView):
     def dispatch(self, request, resource_type, identifier, **kwargs):
         try:
-            resource_type = get_resource_type(resource_type)
+            resource_type = get_halld_config().resource_types[resource_type]
         except KeyError:
             raise halld.exceptions.NoSuchResourceType(resource_type)
         if not isinstance(resource_type, FileResourceTypeDefinition):

@@ -3,9 +3,8 @@ import uuid
 
 from django.contrib.auth.models import User
 
-from halld import exceptions, models, views
-from halld.registry import get_resource_type
-from halld.test_site import registry
+from halld import exceptions, models, views, get_halld_config
+from halld.test_site import definitions
 
 from .base import TestCase
 
@@ -57,7 +56,7 @@ class ResourceHALTestCase(TestCase):
         self.checkResourceExists('snake', response)
 
     def checkResourceExists(self, resource_type, response):
-        resource_type = get_resource_type(resource_type)
+        resource_type = get_halld_config().resource_types[resource_type]
         self.assertEqual(response.status_code, http.client.CREATED)
         href = response['Location']
         assert href.startswith(resource_type.base_url)
