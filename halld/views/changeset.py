@@ -1,14 +1,14 @@
 import http.client
 
 from django.http import HttpResponse
-from django_conneg.views import JSONView
 
 from .. import exceptions
+from .. import renderers
 from ..models import Changeset
-from .base import ObjectCacheView
+from .base import HALLDView
 from .mixins import JSONRequestMixin
 
-class ChangesetView(ObjectCacheView, JSONView, JSONRequestMixin):
+class ChangesetView(JSONRequestMixin, HALLDView):
     def get_new_changeset(self, data):
         if not self.request.user.is_authenticated():
             raise exceptions.Forbidden(self.request.user)
@@ -17,9 +17,13 @@ class ChangesetView(ObjectCacheView, JSONView, JSONRequestMixin):
                          data=data)
 
 class ChangesetListView(ChangesetView):
+    renderer_classes = (
+        renderers.JSONRenderer,
+    )
+
     def post(self, request):
         data = self.get_request_json('application/json')
         changeset = self.get_new_changeset(data)
         changeset.perform(multiple=True,
-                          object_cache=self.object_cache)
+                          object_cache=request.object_cache)
         return HttpResponse(status=http.client.NO_CONTENT)

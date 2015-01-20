@@ -75,53 +75,6 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
     def get_contributed_tags(self, resource, data):
         return self.contributed_tags
 
-    def get_hal(self, user, resource, object_cache, data, exclude_links=False):
-        hal = copy.deepcopy(data)
-        hal['@extant'] = resource.extant
-        links, embedded = {}, {}
-        links['self'] = {'href': resource.href}
-
-        if not exclude_links:
-            app_config = get_halld_config()
-            for link_type in app_config.link_types.values():
-                if not link_type.include:
-                    continue
-                for link_item in hal.pop(link_type.name, []):
-                    if not link_item:
-                        continue
-                    try:
-                        other_hal = object_cache.resource.get_hal(link_item['href'], exclude_links=True)
-                    except (exceptions.NoSuchResource, PermissionDenied):
-                        continue
-                    if link_type.embed:
-                        link_item.update(other_hal)
-                    elif 'title' in other_hal:
-                        link_item['title'] = other_hal['title']
-
-                    if link_type.timeless or (hal['@extant'] and other_hal['@extant']):
-                        link_name = link_type.name
-                        functional = link_type.functional
-                    else:
-                        link_name = 'defunct:' + link_type.name
-                        functional = False
-
-                    target = embedded if link_type.embed else links
-
-                    if functional:
-                        target[link_name] = link_item
-                    else:
-                        if link_name not in target:
-                            target[link_name] = []
-                        target[link_name].append(link_item)
-        hal['_links'] = links
-        if embedded:
-            hal['_embedded'] = embedded
-
-        hal['_meta'] = {'created': resource.created.isoformat(),
-                        'modified': resource.modified.isoformat(),
-                        'version': resource.version}
-        return hal
-
     def get_links(self, resource):
         from ..models import Link
         return Link.objects.filter(active=resource)
@@ -139,7 +92,7 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
         return user.has_perm('halld.instantiate_resourcetype',
                              ResourceType.objects.get(name=self.name))
 
-    def filter_data(self, user, resource, data):
+    def get_filtered_data(self, resource, user, data):
         return data
 
     def normalize_links(self, resource, data):

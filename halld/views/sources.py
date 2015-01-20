@@ -8,11 +8,11 @@ from django.db import transaction
 from django.utils.decorators import method_decorator
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, HttpResponseNotModified
-from django_conneg.http import HttpBadRequest, HttpGone
-from django_conneg.views import JSONView
+from rest_framework.response import Response
 
 from .mixins import VersioningMixin
 from .. import exceptions, get_halld_config
+from .. import response_data
 from ..models import Source, Resource, Changeset
 from .changeset import ChangesetView
 
@@ -24,46 +24,60 @@ class BulkSourceUpdateView(ChangesetView):
         raise NotImplementedError
 
 class SourceListView(ChangesetView):
-    def dispatch(self, request, resource_type, identifier, **kwargs):
+    def initial(self, request, resource_type, identifier):
+        super().initial(request, resource_type, identifier)
         try:
-            resource_type = get_halld_config().resource_types[resource_type]
+            self.resource_type = self.halld_config.resource_types[resource_type]
         except KeyError:
             raise exceptions.NoSuchResourceType(resource_type)
-        resource_href = resource_type.base_url + identifier
-        if not Resource.objects.filter(href=resource_href).exists():
+        self.resource_href = self.resource_type.base_url + identifier
+        if not Resource.objects.filter(href=self.resource_href).exists():
             raise exceptions.SourceDataWithoutResource(resource_type, identifier)
-        return super(SourceListView, self).dispatch(request, resource_href)
 
-    def get(self, request, resource_href):
-        sources = Source.objects.filter(resource_id=resource_href)
+    def get(self, request, resource_type, identifier):
+        sources = Source.objects.filter(resource_id=self.resource_href)
         visible_sources = [source for source in sources
                                   if not source.deleted and
                                      request.user.has_perm('halld.view_source', source)]
-        embedded = {'source:{}'.format(source.type_id): source.get_hal(request.user) for source in visible_sources}
-        data = {'_embedded': embedded}
-        response = HttpResponse(json.dumps(data, indent=2, sort_keys=True),
-                                content_type='application/hal+json')
-        return response
+        return Response(response_data.SourceList(visible_sources))
 
-    def put(self, request, resource_href):
+
+    def put(self, request, resource_type, identifier):
         data = self.get_request_json('application/hal+json')
-        embedded = data.get('_embedded')
-        if not isinstance(embedded, dict):
+        items = data.get('_embedded', {}).get('item')
+        if not isinstance(items, dict):
             raise HttpBadRequest
-        
-        updates = []
-        for name in embedded:
-            if not name.startswith('source:'):
-                continue
-            source_type = name[7:]
+
+        updates, source_types = [], set()
+        for item in items:
+            try:
+                source_type = item['_meta']['sourceType']
+            except KeyError:
+                raise HttpBadRequest
+
+            source_types.add(source_type)
+            item.pop('_links', None)
+            item.pop('_meta', None)
+
             updates.append({
                 'method': 'PUT',
                 'sourceType': source_type,
-                'resourceHref': resource_href,
-                'data': embedded[name],
+                'resourceHref': self.resource_href,
+                'data': data,
             })
 
-        changeset = self.get_new_changeset({'updates': updates})
+        source_types_to_delete = Source.objects.filter(resource_id=self.resource_href) \
+                                               .exclude(source_id__in=source_types).values('source_id')
+
+        for source_type in source_types_to_delete:
+            updates.append({
+                'method': 'DELETE',
+                'sourceType': source_type,
+                'resourceHref': self.resource_href,
+            })
+
+        changeset = self.get_new_changeset({'updates': updates,
+                                            'description': 'PUT source list for {}'.format(self.resource_href)})
         changeset.perform()
         return HttpResponse(status=http.client.NO_CONTENT)
 
