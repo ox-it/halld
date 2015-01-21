@@ -3,6 +3,7 @@ schema = {
     "properties": {
         "performAt": {"type": "string", "format": "date-time"},
         "description": {"type": "string"},
+        "regenerateAll": {"type": "boolean", "enum": [True]},
         "errorHandling": {
             "enum": ["fail-first", "try-all", "ignore"],
             "description": "Strategy for handling update errors. 'fail-first'"

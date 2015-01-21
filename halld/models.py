@@ -92,7 +92,7 @@ class Resource(models.Model, StaleFieldsMixin):
     def cached_source_set(self):
         self._cached_source_set = None
 
-    def collect_data(self):
+    def collect_data(self, object_cache):
         data = Data()
         data['href'] = self.get_absolute_url()
         data['@source'], data['identifier'], data['stableIdentifier'] = {}, {}, {}
@@ -100,9 +100,13 @@ class Resource(models.Model, StaleFieldsMixin):
             data['@source'][source.type_id] = copy.deepcopy(source.data)
         self.collect_identifiers(data)
         for inference in self.get_inferences():
-            inference(self, data)
+            inference(resource=self,
+                      data=data,
+                      object_cache=object_cache)
         for normalization in self.get_normalizations():
-            normalization(self, data)
+            normalization(resource=self,
+                          data=data,
+                          object_cache=object_cache)
         data['identifier'].update(data['stableIdentifier'])
 
         if not self.get_type().allow_uri_override:
@@ -112,8 +116,8 @@ class Resource(models.Model, StaleFieldsMixin):
         del data['@source']
         return data
 
-    def regenerate(self, cascade_set):
-        data = self.collect_data()
+    def regenerate(self, cascade_set, object_cache):
+        data = self.collect_data(object_cache)
         if data == self.data:
             return False
         old_data, self.data = self.data, data
@@ -140,12 +144,13 @@ class Resource(models.Model, StaleFieldsMixin):
         if not self.href:
             self.href = self.get_type().base_url + self.identifier
 
-        object_cache = kwargs.pop('object_cache', None)
+        from halld.util.cache import ObjectCache
+        object_cache = kwargs.pop('object_cache', None) or ObjectCache(self.creator)
         regeneration_path = (self.href,) + kwargs.pop('regeneration_path', ())
         cascade = 'cascade_set' not in kwargs
         cascade_set = kwargs.pop('cascade_set', set())
         if kwargs.pop('regenerate', True):
-            self.regenerate(cascade_set)
+            self.regenerate(cascade_set, object_cache)
 
         if 'data' in self.stale_fields:
             self.created = self.created or now()

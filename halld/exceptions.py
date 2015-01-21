@@ -319,3 +319,8 @@ class MultipleErrors(HALLDException):
         hal = super(MultipleErrors, self).as_hal()
         hal['_embedded'] = {'error': [error.as_hal() for error in self.errors]}
         return hal
+
+class CantRegenerateAll(HALLDException):
+    name = 'cant-regenerate-all'
+    description = 'You do not have the necessary privileges to regenerate all resources.'
+    status_code = http.client.FORBIDDEN

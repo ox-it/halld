@@ -60,7 +60,12 @@ class SourceUpdater(object):
         """
         from ..models import Source
 
-        updates = data['updates']
+        if data.get('regenerateAll') and not self.committer.is_superuser:
+            raise exceptions.CantRegenerateAll()
+        elif data.get('regenerateAll'):
+            logger.info("Regenerating all for user %s", self.committer.username)
+
+        updates = data.get('updates', [])
         logger.info("Performing %d updates for user %s", len(updates), self.committer.username)
         error_handling = data.get('error-handling', "fail-first")
         errors = []
@@ -73,7 +78,7 @@ class SourceUpdater(object):
                 match = self.source_href_re.match(update['href'])
                 if not match:
                     bad_hrefs.add(update['href'])
-                update['resourceHref'] = match.group('resource_href') 
+                update['resourceHref'] = match.group('resource_href')
                 update['sourceType'] = match.group('source_type')
             else:
                 update['resourceHref'] = urljoin(self.base_href, update['resourceHref'])
@@ -88,7 +93,12 @@ class SourceUpdater(object):
         if missing_source_types:
             raise exceptions.NoSuchSourceType(missing_source_types)
 
-        resources = {r.href: r for r in self.object_cache.resource.get_many(resource_hrefs, ignore_missing=True) if r}
+        if data.get('regenerateAll'):
+            resources = list(models.Resource.objects.all())
+            self.object_cache.resource.add_many(resources)
+        else:
+            resources = filter(None, self.object_cache.resource.get_many(resource_hrefs, ignore_missing=True))
+        resources = {r.href: r for r in resources}
         missing_hrefs = resource_hrefs - set(resources)
         if missing_hrefs:
             raise exceptions.SourceDataWithoutResource(missing_hrefs)
@@ -155,7 +165,7 @@ class SourceUpdater(object):
                     logger.debug("Regenerating resource %d of %d for user %s (%d cascades)",
                                  j, len(resources_to_save), self.committer.username,
                                  len(cascade_set))
-                if resource.regenerate(cascade_set):
+                if resource.regenerate(cascade_set, self.object_cache):
                     resource.update_links()
                     resource.update_identifiers()
                     save_set.add(resource)
@@ -171,7 +181,11 @@ class SourceUpdater(object):
                 logger.debug("Saving resource %d of %d for user %s",
                              i, len(resources), self.committer.username)
             with save_wrapper():
-                resource.save(regenerate=False, update_links=False, update_identifiers=False, force_update=True)
+                resource.save(regenerate=False,
+                              update_links=False,
+                              update_identifiers=False,
+                              force_update=True,
+                              object_cache=self.object_cache)
 
         if errors:
             if self.error_handling == 'ignore':
