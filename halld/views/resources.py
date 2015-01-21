@@ -95,6 +95,7 @@ class ResourceDetailView(HALLDView):
     def get(self, request, resource_type, identifier, href):
         resource = self.object_cache.resource.get(href)
         self.context['resource'] = resource
+        self.context['filtered_data'] = resource.get_filtered_data(request.user, resource.data)
         self.context['resource_type'] = resource_type
         if resource.deleted:
             raise exceptions.DeletedResource()
@@ -107,8 +108,8 @@ class ResourceDetailView(HALLDView):
 
     def hal_json_from_context(self, request, context):
         resource = context['resource']
-        data = resource.filter_data(request.user, resource.data)
-        hal = resource.get_hal(request.user, self.object_cache, data)
+        hal = resource.get_hal(request.user, self.object_cache,
+                               self.context['filtered_data'])
         if not hal.get('_links'):
             hal['_links'] = {}
         for source in resource.source_set.all():

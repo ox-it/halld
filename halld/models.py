@@ -232,7 +232,8 @@ class Resource(models.Model, StaleFieldsMixin):
         return get_halld_config().resource_types[self.type_id]
 
     def get_hal(self, user, object_cache, data=None, exclude_links=False):
-        return self.get_type().get_hal(user, self, object_cache, data or self.data, exclude_links)
+        data = self.get_filtered_data(user, data or self.data)
+        return self.get_type().get_hal(user, self, object_cache, data, exclude_links)
 
     def get_jsonld(self, user, data):
         jsonld = self.get_hal(user, data)
@@ -319,11 +320,9 @@ class Resource(models.Model, StaleFieldsMixin):
     def get_absolute_url(self):
         return self.get_type().base_url + self.identifier
 
-    def filter_data(self, user, data=None):
+    def get_filtered_data(self, user, data=None):
         data = data if data is not None else self.data
-        if user.is_superuser:
-            return data
-        return self.get_type().filter_data(user, self, data)
+        return self.get_type().get_filtered_data(user, self, data)
 
     @classmethod
     def create(cls, creator, resource_type, identifier=None):
