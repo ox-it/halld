@@ -19,14 +19,14 @@ class HALJSONRenderer(HALLDRenderer):
         super().set_render_parameters(request)
 
     def render_index(self, index):
-        return {'_links': index.links}
+        return {'_links': index['links']}
 
     def render_resource_list(self, resource_list):
-        resource_type = resource_list.resource_type
+        resource_type = resource_list['resource_type']
 
-        paginator, page = self.get_paginator_and_page(resource_list.resources)
+        paginator, page = self.get_paginator_and_page(resource_list['resources'])
 
-        hal = copy.deepcopy(resource_list.resource_type.get_type_properties())
+        hal = copy.deepcopy(resource_type.get_type_properties())
         hal.update(self.paginated(paginator, page, self.resource_to_hal))
         hal['_links'].update({
             'find': {'href': reverse('halld:resource-list', args=[resource_type.name]) + '/{identifier}',
@@ -36,28 +36,28 @@ class HALJSONRenderer(HALLDRenderer):
             'findSourceList': {'href': reverse('halld:resource-list', args=[resource_type.name]) + '/{identifier}/source',
                                'templated': True},
         })
-        if resource_list.exclude_extant:
+        if resource_list['exclude_extant']:
             hal['_links']['includeExtant'] = {'href': self.url_param_replace(extant=None)}
         else:
             hal['_links']['excludeExtant'] = {'href': self.url_param_replace(extant='off')}
-        if resource_list.exclude_defunct:
+        if resource_list['exclude_defunct']:
             hal['_links']['includeDefunct'] = {'href': self.url_param_replace(defunct='on')}
         else:
             hal['_links']['excludeDefunct'] = {'href': self.url_param_replace(defunct=None)}
         return hal
 
     def render_resource(self, resource):
-        return self.resource_to_hal(resource.resource,
+        return self.resource_to_hal(resource['resource'],
                                     include_links=True,
                                     include_source_links=True)
         
 
     def render_source_list(self, source_list):
-        paginator, page = self.get_paginator_and_page(source_list.sources)
+        paginator, page = self.get_paginator_and_page(source_list['sources'])
         return self.paginated(paginator, page, self.source_to_hal)
 
     def render_source(self, source):
-        return self.source_to_hal(source.source)
+        return self.source_to_hal(source['source'])
 
     def resource_to_hal(self, resource, include_links=True, include_source_links=False):
         data = resource.get_filtered_data(self.user)

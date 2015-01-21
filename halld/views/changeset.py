@@ -27,3 +27,11 @@ class ChangesetListView(ChangesetView):
         changeset.perform(multiple=True,
                           object_cache=request.object_cache)
         return HttpResponse(status=http.client.NO_CONTENT)
+
+class RegenerateAllView(ChangesetView):
+    def post(self, request):
+        changeset = self.get_new_changeset({'description': 'Regenerate all (POST)',
+                                            'regenerateAll': True})
+        changeset.perform(multiple=True,
+                          object_cache=self.object_cache)
+        return HttpResponse(status=http.client.NO_CONTENT)

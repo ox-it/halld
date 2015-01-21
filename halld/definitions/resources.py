@@ -95,7 +95,7 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
     def get_filtered_data(self, resource, user, data):
         return data
 
-    def normalize_links(self, resource, data):
+    def normalize_links(self, resource, data, **kwargs):
         """
         Makes sure that each link is a list of dicts, each with a href.
         """
@@ -116,10 +116,10 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
             if links:
                 data[link_type.name] = links
 
-    def normalize_dates(self, resource, data):
+    def normalize_dates(self, resource, data, **kwargs):
         pass # TODO
 
-    def add_inbound_links(self, resource, data):
+    def add_inbound_links(self, resource, data, **kwargs):
         from ..models import Link
         for link in Link.objects.filter(target_href=resource.href):
             link_type = get_halld_config().link_types[link.type_id].inverse()
@@ -130,7 +130,7 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
             else:
                 data[link_type.name] = [link_dict]
 
-    def sort_links(self, resource, data):
+    def sort_links(self, resource, data, **kwargs):
         for link_type in get_halld_config().link_types.values():
             try:
                 links = data[link_type.name]

@@ -49,7 +49,7 @@ class ExtantTestCase(TestCase):
                                        '@extant': False,
                                        'identifier': {'foo': 'bar'}}
         r.save()
-        r.collect_data.assert_called_once_with()
+        self.assertEqual(r.collect_data.call_count, 1)
         self.assertEqual(Identifier.objects.filter(resource=r,
                                                    scheme='foo',
                                                    value='bar').count(), 0)
@@ -61,7 +61,7 @@ class ExtantTestCase(TestCase):
                                        '@extant': False,
                                        'stableIdentifier': {'foo': 'bar'}}
         r.save()
-        r.collect_data.assert_called_once_with()
+        self.assertEqual(r.collect_data.call_count, 1)
         self.assertEqual(Identifier.objects.filter(resource=r,
                                                    scheme='foo',
                                                    value='bar').count(), 1)

@@ -34,7 +34,7 @@ class IndexView(HALLDView):
                 'href': reverse('halld:resource-type-detail', args=[resource_type.name])}
             for resource_type in get_halld_config().resource_types.values()
         })
-        return Response(Index(links))
+        return Response(Index(links=links))
 
     def hal_json_from_context(self, request, context):
         hal = {'_links': {}}

@@ -2,10 +2,12 @@ import http.client
 
 from django.db import transaction
 from rest_framework.response import Response
+import rest_framework.renderers
 
 from .base import HALLDView
 from ..models import Resource
 from .. import exceptions
+from .. import renderers
 from halld import response_data
 
 __all__ = ['ResourceListView', 'ResourceDetailView']
@@ -27,7 +29,8 @@ class ResourceListView(HALLDView):
             resources = resources.filter(extant=False)
         if self.exclude_defunct:
             resources = resources.filter(extant=True)
-        return Response(response_data.ResourceList(resources, self.resource_type,
+        return Response(response_data.ResourceList(resources=resources,
+                                                   resource_type=self.resource_type,
                                                    exclude_extant=self.exclude_extant,
                                                    exclude_defunct=self.exclude_defunct))
 
@@ -47,11 +50,19 @@ class ResourceDetailView(HALLDView):
             raise exceptions.NotValidIdentifier(identifier)
         self.href = self.resource_type.base_url + identifier
 
+    def get_template_names(self):
+        return ['halld/resource/' + self.kwargs['resource_type'] + '.html',
+                'halld/resource.html']
+
     def get(self, request, resource_type, identifier):
         resource = request.object_cache.resource.get(self.href)
         if resource.deleted:
             raise exceptions.DeletedResource()
-        return Response(response_data.Resource(resource))
+        return Response(response_data.Resource({
+            'resource': resource,
+            'filtered_data': resource.get_filtered_data(request.user, resource.data),
+            'resource_type': resource_type,
+        }))
 
     @transaction.atomic
     def post(self, request, resource_type, identifier):
