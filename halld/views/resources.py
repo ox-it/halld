@@ -12,6 +12,7 @@ from django_conneg.http import HttpResponseCreated
 from .base import HALLDView
 from .. import exceptions, get_halld_config
 from ..models import Resource
+from django_conneg.views import HTMLView
 
 __all__ = ['ResourceListView', 'ResourceDetailView']
 
@@ -81,7 +82,7 @@ class ResourceListView(HALLDView):
         resource = Resource.create(request.user, resource_type)
         return HttpResponseCreated(resource.get_absolute_url())
 
-class ResourceDetailView(HALLDView):
+class ResourceDetailView(HALLDView, HTMLView):
     def dispatch(self, request, resource_type, identifier, **kwargs):
         try:
             resource_type = get_halld_config().resource_types[resource_type]
@@ -91,6 +92,11 @@ class ResourceDetailView(HALLDView):
             raise exceptions.NotValidIdentifier(identifier)
         href = resource_type.base_url + identifier
         return super(ResourceDetailView, self).dispatch(request, resource_type, identifier, href, **kwargs)
+
+    @property
+    def template_name(self):
+        return ('halld/resource/' + self.args[0].name,
+                'halld/resource')
 
     def get(self, request, resource_type, identifier, href):
         resource = self.object_cache.resource.get(href)

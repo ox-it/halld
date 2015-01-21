@@ -7,7 +7,7 @@ from .base import HALLDView
 __all__ = ['IndexView']
 
 class IndexView(HALLDView, HTMLView):
-    template_name = 'index'
+    template_name = 'halld/index'
 
     def get(self, request):
         return self.render()
