@@ -74,26 +74,9 @@ class SchemaValidatedSourceTypeDefinition(SourceTypeDefinition):
                             'schema': schema})
         return source_type
 
-    @property
-    def _schema(self):
-        try:
-            return _local.schemas[self.name]
-        except (AttributeError, KeyError):
-            if not hasattr(_local, 'schemas'):
-                _local.schemas = {}
-            if isinstance(self.schema, dict):
-                _local.schemas[self.name] = self.schema
-            elif isinstance(self.schema, str):
-                with open(self.schema, 'r') as f:
-                    _local.schemas[self.name] = ujson.load(f)
-            else:
-                raise AssertionError("Unexpected schema type ({0}) for source type {1}".format(type(self.schema),
-                                                                                               self.name))
-            return _local.schemas[self.name]
-
     def validate_data(self, source, data):
         try:
-            jsonschema.validate(data, self._schema)
+            jsonschema.validate(data, self.schema)
         except jsonschema.ValidationError as e:
             raise exceptions.SchemaValidationError(e)
         super(SchemaValidatedSourceTypeDefinition, self).validate_data(source, data)
