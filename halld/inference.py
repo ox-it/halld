@@ -14,7 +14,7 @@ class Inference(metaclass=abc.ABCMeta):
         pass
 
 class Tags(Inference):
-    def __call__(self, resource, data):
+    def __call__(self, resource, data, **kwargs):
         tags = resource.get_type().get_contributed_tags(resource, data)
         for source in resource.cached_source_set:
             if not source.deleted:
@@ -33,7 +33,7 @@ class FirstOf(FromPointers):
         self.update = update
         super(FirstOf, self).__init__(target, *pointers)
 
-    def __call__(self, resource, data):
+    def __call__(self, resource, data, **kwargs):
         for pointer in self.pointers:
             try:
                 result = data.resolve(pointer)
@@ -73,7 +73,7 @@ class Set(FromPointers):
             pointers += (target,)
         super(Set, self).__init__(target, *pointers)
 
-    def __call__(self, resource, data):
+    def __call__(self, resource, data, **kwargs):
         result = set()
         for pointer in self.pointers:
             value = jsonpointer.resolve_pointer(data, pointer, [])
@@ -91,8 +91,8 @@ class ResourceMeta(Inference):
     def __init__(self, catalog_uri):
         self.catalog_uri = catalog_uri
 
-    def __call__(self, resource, hal):
-        hal.update({
+    def __call__(self, resource, data, **kwargs):
+        data.update({
             'inCatalog': self.catalog_uri,
             'catalogRecord': {
                 '@type': 'CatalogRecord',
