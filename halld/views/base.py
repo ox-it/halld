@@ -1,14 +1,8 @@
 import abc
-import json
-import itertools
 
-from django.conf import settings
-from django.http import HttpResponse, QueryDict
-from django.views.generic.base import View
+from django.core.paginator import Paginator
 from rest_framework.views import APIView
 import rest_framework.renderers
-import rdflib
-from rdflib_jsonld.parser import to_rdf as parse_jsonld
 
 from ..util.cache import ObjectCache
 import halld.renderers
@@ -27,3 +21,11 @@ class HALLDView(APIView, metaclass=abc.ABCMeta):
         request.object_cache = ObjectCache(request.user)
         self.halld_config = get_halld_config()
 
+
+    def get_paginator_and_page(self, objects):
+        paginator = Paginator(objects, 100)
+        try:
+            page_num = int(self.request.GET.get('page'))
+        except:
+            page_num = 1
+        return paginator, paginator.page(page_num)

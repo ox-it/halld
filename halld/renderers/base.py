@@ -42,14 +42,6 @@ class HALLDRenderer(BaseRenderer, metaclass=abc.ABCMeta):
         self.user = request.user
         self.request = request
 
-    def get_paginator_and_page(self, objects):
-        paginator = Paginator(objects, 100)
-        try:
-            page_num = int(self.request.GET.get('page'))
-        except:
-            page_num = 1
-        return paginator, paginator.page(page_num)
-
     def url_param_replace(self, **kwargs):
         query = QueryDict(self.request.META['QUERY_STRING'], mutable=True)
         for key, value in kwargs.items():

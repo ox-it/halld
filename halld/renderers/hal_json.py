@@ -1,7 +1,6 @@
 import copy
 import json
 
-from django.core.exceptions import PermissionDenied
 from django.core.urlresolvers import reverse
 
 from .base import HALLDRenderer
@@ -24,10 +23,11 @@ class HALJSONRenderer(HALLDRenderer):
     def render_resource_list(self, resource_list):
         resource_type = resource_list['resource_type']
 
-        paginator, page = self.get_paginator_and_page(resource_list['resources'])
+        paginator, page = resource_list['paginator'], resource_list['page']
 
         hal = copy.deepcopy(resource_type.get_type_properties())
-        hal.update(self.paginated(paginator, page, self.resource_to_hal))
+        hal.update(self.paginated(paginator, page, self.resource_to_hal,
+                                  resource_list.resource_data))
         hal['_links'].update({
             'find': {'href': reverse('halld:resource-list', args=[resource_type.name]) + '/{identifier}',
                      'templated': True},
@@ -47,9 +47,7 @@ class HALJSONRenderer(HALLDRenderer):
         return hal
 
     def render_resource(self, resource):
-        return self.resource_to_hal(resource['resource'],
-                                    include_links=True,
-                                    include_source_links=True)
+        return self.resource_to_hal(resource.data)
         
 
     def render_source_list(self, source_list):
@@ -59,61 +57,28 @@ class HALJSONRenderer(HALLDRenderer):
     def render_source(self, source):
         return self.source_to_hal(source['source'])
 
-    def resource_to_hal(self, resource, include_links=True, include_source_links=False):
-        data = resource.get_filtered_data(self.user)
+    def render_exception(self, exception):
+        return {'detail': exception.detail}
 
-        hal = copy.deepcopy(data)
-        hal['@extant'] = resource.extant
+    def resource_to_hal(self, data):
         links, embedded = {}, {}
-        links['self'] = {'href': resource.href}
-
-        if include_links and self.include_links:
-            for link_type in self.halld_config.link_types.values():
-                if not link_type.include:
+        for link_type in self.halld_config.link_types.values():
+            for prefix in ('', 'defunct:'):
+                link_name = prefix + link_type.name
+                link_items = data.pop(link_name, None)
+                if not link_items:
                     continue
-                for link_item in hal.pop(link_type.name, []):
-                    if not link_item:
-                        continue
-                    try:
-                        other_hal = self.resource_to_hal(self.object_cache.resource.get(link_item['href']), include_links=False)
-                    except (exceptions.NoSuchResource, PermissionDenied):
-                        continue
-                    if link_type.embed:
-                        link_item.update(other_hal)
-                    elif 'title' in other_hal:
-                        link_item['title'] = other_hal['title']
-
-                    if link_type.timeless or (hal['@extant'] and other_hal['@extant']):
-                        link_name = link_type.name
-                        functional = link_type.functional
-                    else:
-                        link_name = 'defunct:' + link_type.name
-                        functional = False
-
-                    target = embedded if link_type.embed else links
-
-                    if functional:
-                        target[link_name] = link_item
-                    else:
-                        if link_name not in target:
-                            target[link_name] = []
-                        target[link_name].append(link_item)
-        else:
-            for link_type in self.halld_config.link_types.values():
-                hal.pop(link_type.name, None)
-        hal['_links'] = links
+                if link_type.embed:
+                    embedded[link_name] = link_items
+                else:
+                    links[link_name] = link_items
+        for name in ('self', 'findSource', 'sourceList'):
+            if name in data:
+                links[name] = data.pop(name)
+        data['_links'] = links
         if embedded:
-            hal['_embedded'] = embedded
-        
-        if include_source_links:
-            links['findSource'] = {'href': resource.href + '/source/{sourceName}',
-                                   'templated': True}
-            links['sourceList'] = {'href': resource.href + '/source'}
-
-        hal['_meta'] = {'created': resource.created.isoformat(),
-                        'modified': resource.modified.isoformat(),
-                        'version': resource.version}
-        return hal
+            data['_embedded'] = embedded
+        return data
 
     def source_to_hal(self, source):
         data = copy.copy(source.data)
@@ -127,7 +92,7 @@ class HALJSONRenderer(HALLDRenderer):
         }
         return data
 
-    def paginated(self, paginator, page, to_hal_func):
+    def paginated(self, paginator, page, to_hal_func, objects=None):
         links = {
             'first': {'href': self.url_param_replace(page=1)},
             'last': {'href': self.url_param_replace(page=paginator.num_pages)},
@@ -139,7 +104,7 @@ class HALJSONRenderer(HALLDRenderer):
         if page.number < paginator.num_pages:
             links['next'] = {'href': self.url_param_replace(page=page.number+1)}
         embedded = {
-            'item': list(map(to_hal_func, page.object_list))
+            'item': list(map(to_hal_func, objects or page.object_list))
         }
         return {
             '_links': links,

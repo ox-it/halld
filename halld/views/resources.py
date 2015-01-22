@@ -23,16 +23,24 @@ class ResourceListView(HALLDView):
         self.exclude_extant = request.GET.get('extant', 'on') == 'off'
         self.exclude_defunct = request.GET.get('defunct', 'off') == 'off'
 
+    def get_template_names(self):
+        return ['halld/resource-type/' + self.kwargs['resource_type'] + '.html',
+                'halld/resource-type.html']
+
     def get(self, request, resource_type):
         resources = Resource.objects.filter(type_id=self.resource_type.name)
         if self.exclude_extant:
             resources = resources.filter(extant=False)
         if self.exclude_defunct:
             resources = resources.filter(extant=True)
-        return Response(response_data.ResourceList(resources=resources,
+        paginator, page = self.get_paginator_and_page(resources)
+        return Response(response_data.ResourceList(paginator=paginator,
+                                                   page=page,
                                                    resource_type=self.resource_type,
                                                    exclude_extant=self.exclude_extant,
-                                                   exclude_defunct=self.exclude_defunct))
+                                                   exclude_defunct=self.exclude_defunct,
+                                                   user=request.user,
+                                                   object_cache=request.object_cache))
 
     @transaction.atomic
     def post(self, request, resource_type):
@@ -62,6 +70,8 @@ class ResourceDetailView(HALLDView):
             'resource': resource,
             'filtered_data': resource.get_filtered_data(request.user, resource.data),
             'resource_type': resource_type,
+            'user': request.user,
+            'object_cache': request.object_cache,
         }))
 
     @transaction.atomic
