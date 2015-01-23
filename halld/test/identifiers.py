@@ -43,7 +43,8 @@ class ByIdentifierViewTestCase(TestCase):
         data = {'scheme': 'snake',
                 'allInScheme': True,
                 'includeSources': ['science']}
-        request = self.factory.post('/by-identifier', json.dumps(data), 'application/json')
+        request = self.factory.post('/by-identifier', json.dumps(data),
+                                    content_type='application/json')
         request.user = self.anonymous_user
         response = self.by_identifier_view(request)
         data = json.loads(response.content.decode())

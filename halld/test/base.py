@@ -44,7 +44,7 @@ class TestCase(django.test.TestCase):
         response, identifier = self.create_resource()
         resource_href = response['Location']
         source_href = resource_href + '/source/science'
-        request = self.factory.put(source_href, '{}', 'application/hal+json')
+        request = self.factory.put(source_href, '{}', content_type='application/hal+json')
         request.user = self.superuser
         response = self.source_detail_view(request, 'snake', identifier, source_type)
         return response, identifier, source_href
