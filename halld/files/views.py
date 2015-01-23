@@ -95,7 +95,6 @@ class FileView(HALLDView):
         source_updater.perform_updates({'updates': updates})
 
 class FileCreationView(ResourceListView, FileView):
-    @method_decorator(login_required)
     @transaction.atomic
     def post(self, request, resource_type):
         if not isinstance(self.resource_type, FileResourceTypeDefinition):
@@ -114,36 +113,37 @@ class FileCreationView(ResourceListView, FileView):
         return response
 
 class FileDetailView(FileView):
-    def dispatch(self, request, resource_type, identifier, **kwargs):
+    def initial(self, request, resource_type, identifier):
+        super().initial(request, resource_type, identifier)
         try:
-            resource_type = get_halld_config().resource_types[resource_type]
+            self.resource_type = self.halld_config.resource_types[resource_type]
         except KeyError:
             raise halld.exceptions.NoSuchResourceType(resource_type)
-        if not isinstance(resource_type, FileResourceTypeDefinition):
-            raise exceptions.NotAFileResourceType(resource_type)
-        href = request.build_absolute_uri(reverse('halld:resource-detail',
-                                                  args=[resource_type.name, identifier]))
-        resource = get_object_or_404(Resource, href=href)
-        resource_file = ResourceFile.objects.get(resource=resource)
-        return super(FileView, self).dispatch(request, resource_file, **kwargs)
+        if not isinstance(self.resource_type, FileResourceTypeDefinition):
+            raise exceptions.NotAFileResourceType(self.resource_type)
+        self.href = request.build_absolute_uri(reverse('halld:resource-detail',
+                                                       args=[self.resource_type.name, identifier]))
+        self.resource = get_object_or_404(Resource, href=self.href)
+        self.resource_file = ResourceFile.objects.get(resource=self.resource)
 
-    def get(self, request, resource_file):
+    def get(self, request, resource_type, identifier):
         if conf.USE_XSENDFILE:
-            response = HttpResponse(content_type=resource_file.content_type)
-            response['X-Send-File'] = resource_file.file.path
+            response = HttpResponse(content_type=self.resource_file.content_type)
+            response['X-Send-File'] = self.resource_file.file.path
         else:
-            f = open(resource_file.file.path, 'r')
+            f = open(self.resource_file.file.path, 'r')
             response = StreamingHttpResponse(f,
-                                             content_type=resource_file.content_type)
+                                             content_type=self.resource_file.content_type)
             response['Content-Length'] = os.fstat(f.fileno()).st_size
         return response
     
-    @method_decorator(login_required)
-    def post(self, request, resource_file):
-        self.process_file(request, resource_file)
+    @transaction.atomic
+    def post(self, request, resource_type, identifier):
+        self.process_file(request, self.resource_file)
         return HttpResponse('', status=http.client.NO_CONTENT)
 
-    @method_decorator(login_required)
-    def put(self, request, resource_file):
-        self.process_file(request, resource_file)
+    @transaction.atomic
+    def put(self, request, resource_type, identifier):
+        self.process_file(request, self.resource_file)
         return HttpResponse('', status=http.client.NO_CONTENT)
+

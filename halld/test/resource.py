@@ -31,18 +31,18 @@ class ResourceListTestCase(TestCase):
         request.user = self.anonymous_user
         response = self.resource_list_view(request, 'snake')
         self.assertIsInstance(response.data, response_data.ResourceList)
-        self.assertEqual(len(response.data['resources']), 1)
-        self.assertEqual(response.data['resources'][0]['self']['href'],
+        self.assertEqual(response.data['paginator'].count, 1)
+        self.assertEqual(next(response.data.resource_data)['self']['href'],
                          self.defunct_resource.href)
 
     def testExtantResources(self):
         self.create_resources()
         request = self.factory.get('/snake')
-        request.user = self.anonymous_user
+        force_authenticate(request, self.anonymous_user)
         response = self.resource_list_view(request, 'snake')
-        data = json.loads(response.content.decode())
-        self.assertEqual(len(data['_embedded']['item']), 1)
-        self.assertEqual(data['_embedded']['item'][0]['_links']['self']['href'],
+        self.assertIsInstance(response.data, response_data.ResourceList)
+        self.assertEqual(response.data['paginator'].count, 1)
+        self.assertEqual(next(response.data.resource_data)['self']['href'],
                          self.extant_resource.href)
 
 
@@ -54,7 +54,7 @@ class ResourceDetailTestCase(TestCase):
 
         request = self.factory.get('/snake/' + resource.identifier,
                                    headers={'Accept': 'application/hal+json'})
-        request.user = self.anonymous_user
+        force_authenticate(request, self.anonymous_user)
         response = self.resource_detail_view(request, 'snake', resource.identifier)
-        hal = json.loads(response.content.decode())
-        self.assertEqual(hal.get('title'), 'Python')
+        self.assertEqual(response.data.data.get('title'), 'Python')
+

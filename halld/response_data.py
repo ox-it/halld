@@ -45,7 +45,7 @@ class Resource(ResponseData):
         data = self['resource'].get_filtered_data(self['user'])
 
         data['_extant'] = self['resource'].extant
-        data['href'] = self['resource'].href
+        data['self'] = {'href': self['resource'].href}
 
         link_names = set()
         if self.get('include_links', True):
