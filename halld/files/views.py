@@ -10,7 +10,6 @@ from django.http import HttpResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
 from django.views.generic import View
-from django_conneg.http import HttpResponseCreated
 
 from .. import get_halld_config
 from ..models import Resource

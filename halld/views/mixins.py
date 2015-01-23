@@ -4,7 +4,6 @@ import datetime
 import email.utils
 
 from django.views.generic import View
-from django_conneg.http import HttpBadRequest
 import ujson
 
 from .. import exceptions

@@ -10,7 +10,7 @@ INSTALLED_APPS = [
     'halld.test_site.apps.TestHALLDConfig',
     'halld.files',
     'halld.test_site',
-    'django_conneg',
+    'rest_framework',
 ]
 
 BASE_URL = 'http://testserver/'

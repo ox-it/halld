@@ -322,3 +322,4 @@ class CantRegenerateAll(HALLDException):
     name = 'cant-regenerate-all'
     detail = 'You do not have the necessary privileges to regenerate all resources.'
     status_code = http.client.FORBIDDEN
+
