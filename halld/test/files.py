@@ -7,6 +7,7 @@ from django.core.urlresolvers import reverse
 from django.contrib.auth.models import User
 import mock
 from rest_framework.test import force_authenticate
+import rest_framework.exceptions
 
 from .base import TestCase
 from ..models import Resource, Source
@@ -141,8 +142,8 @@ class FileViewTestCase(FileTestCase):
         path, identifier = self.create_file_resource()
         request = self.factory.delete(path + '/file')
         request.user = self.superuser
-        response = self.file_detail_view(request, 'document', identifier)
-        self.assertEqual(response.status_code, http.client.METHOD_NOT_ALLOWED)
+        with self.assertRaises(rest_framework.exceptions.MethodNotAllowed):
+            response = self.file_detail_view(request, 'document', identifier)
 
 class FileMetadataTestCase(TestCase):
     def upload_image(self):
