@@ -17,10 +17,6 @@ class ChangesetView(JSONRequestMixin, HALLDView):
                          data=data)
 
 class ChangesetListView(ChangesetView):
-    renderer_classes = (
-        renderers.JSONRenderer,
-    )
-
     def post(self, request):
         data = self.get_request_json('application/json')
         changeset = self.get_new_changeset(data)
