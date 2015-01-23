@@ -81,7 +81,7 @@ class FileResourceDetailViewTestCase(FileTestCase):
         request.user = self.superuser
         response = self.resource_detail_view(request, 'document', identifier)
 
-        file_link = response.data.get('describes')
+        file_link = response.data.data.get('describes')
         self.assertIsInstance(file_link, dict)
         self.assertEqual(request.build_absolute_uri(file_link.get('href')),
                          request.build_absolute_uri(reverse('halld-files:file-detail',
