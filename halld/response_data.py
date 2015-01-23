@@ -1,7 +1,6 @@
 from django.core.exceptions import PermissionDenied
 from django.utils.functional import cached_property
 
-from . import exceptions
 from halld import get_halld_config
 
 class ResponseData(dict):
@@ -39,6 +38,7 @@ class Resource(ResponseData):
 
     @cached_property
     def data(self):
+        from . import exceptions
         data = self['resource'].get_filtered_data(self['user'])
 
         data['_extant'] = self['resource'].extant
@@ -103,3 +103,5 @@ class SourceList(ResponseData):
 class Source(ResponseData):
     pass
 
+class Error(ResponseData):
+    pass

@@ -51,14 +51,14 @@ class HALJSONRenderer(HALLDRenderer):
         
 
     def render_source_list(self, source_list):
-        paginator, page = self.get_paginator_and_page(source_list['sources'])
+        paginator, page = source_list['paginator'], source_list['page']
         return self.paginated(paginator, page, self.source_to_hal)
 
     def render_source(self, source):
         return self.source_to_hal(source['source'])
 
-    def render_exception(self, exception):
-        return {'detail': exception.detail}
+    def render_error(self, error):
+        return dict(error)
 
     def resource_to_hal(self, data):
         links, embedded = {}, {}

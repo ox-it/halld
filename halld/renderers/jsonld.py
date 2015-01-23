@@ -28,3 +28,6 @@ class JSONLDRenderer(HALLDRenderer):
 
     def render_source(self, source):
         pass
+
+    def render_error(self, error):
+        pass

@@ -4,17 +4,19 @@ import http.client
 import jsonpointer
 from rest_framework.exceptions import APIException
 
+from . import response_data
 
 class HALLDException(APIException, metaclass=abc.ABCMeta):
     @abc.abstractproperty
     def name(self):
         pass
 
-    def as_hal(self):
-        return {
+    @property
+    def detail(self):
+        return response_data.Error({
             'error': self.name,
-            'detail': self.detail,
-        }
+            'detail': self.description,
+        })
 
 class SourceDeleted(APIException):
     name = 'source-deleted'
@@ -22,67 +24,82 @@ class SourceDeleted(APIException):
 
 class CannotAssignIdentifier(HALLDException):
     name = 'cannot-assign-identifier'
-    detail = 'You are not permitted to assign identifiers for this type of resource. POST against the resource collection to have one assigned.'
+    description = 'You are not permitted to assign identifiers for this type of resource. POST against the resource collection to have one assigned.'
     status_code = http.client.FORBIDDEN
 
 class NoSuchResourceType(HALLDException):
     name = 'no-such-resource-type'
-    detail = 'There is no such resource type'
+    description = 'There is no such resource type'
     status_code = http.client.NOT_FOUND
 
     def __init__(self, resource_type):
         self.resource_type = resource_type
 
-    def as_hal(self):
-        hal = super(NoSuchResourceType, self).as_hal()
-        hal['resourceType'] = self.resource_type
-        return hal
+    @property
+    def detail(self):
+        data = super().detail
+        data['resourceType'] = self.resource_type
+        return data
 
 class NotValidIdentifier(HALLDException):
     name = 'not-a-valid-identifier'
-    detail = 'The resource identifier is not valid'
+    description = 'The resource identifier is not valid'
     status_code = http.client.NOT_FOUND
+
+    def __init__(self, identifier):
+        self.identifier = identifier
+
+    @property
+    def detail(self):
+        data = super().detail
+        data['identifier'] = self.identifier
+        return data
 
 class NoSuchResource(HALLDException):
     name = 'no-such-resource'
-    detail = 'You are trying to update a source document for one or more resources that do not exist.'
-    status_code = http.client.CONFLICT
+    description = 'You are trying to update a source document for one or more resources that do not exist.'
+    status_code = http.client.NOT_FOUND
 
     def __init__(self, hrefs):
         if not isinstance(hrefs, (list, tuple)):
             hrefs = (hrefs,)
         self.hrefs = hrefs
 
-    def as_hal(self):
-        hal = super(NoSuchResource, self).as_hal()
-        hal['_links'] = {
+    @property
+    def detail(self):
+        data = super().detail
+        data['_links'] = {
             'missingResources': [{
                 'href': href,
             } for href in self.hrefs],
         }
-        return hal
+        return data
 
 class LinkTargetDoesNotExist(NoSuchResource):
     name = 'link-target-does-not-exist'
-    detail = 'The source data contains a link to a resource that does not exist.'
+    description = 'The source data contains a link to a resource that does not exist.'
 
     def __init__(self, link_type, hrefs):
         super(LinkTargetDoesNotExist, self).__init__(hrefs)
         self.link_type = link_type
 
-    def as_hal(self):
-        hal = super(LinkTargetDoesNotExist, self).as_hal()
-        hal['linkType'] = self.link_type.name
-        return hal
+    @property
+    def detail(self):
+        data = super().data
+        data['linkType'] = self.link_type.name
+        return data
 
 class NoSuchSource(HALLDException):
     name = 'no-such-source'
-    detail = "You are attempting to view or update source data that doesn't yet exist. Create it with PUT first."
+    description = "You are attempting to view or update source data that doesn't yet exist. Create it with PUT first."
     status_code = http.client.NOT_FOUND
+
+    def __init__(self, href):
+        self.href = href
 
 class IncompatibleSourceType(HALLDException):
     name = 'incompatible-source-type'
-    detail = "Sources of this type may not be attached to this type of resource"
+    description = "Sources of this type may not be attached to this type of resource"
     status_code = http.client.NOT_FOUND
 
     def __init__(self, resource_type, source_type):
@@ -96,12 +113,12 @@ class IncompatibleSourceType(HALLDException):
 
 class SourceValidationError(HALLDException):
     name = 'data-validation-failed'
-    detail = "The data you provided failed validation. Please consult the documentation for more details."
+    description = "The data you provided failed validation. Please consult the documentation for more descriptions."
     status_code = http.client.BAD_REQUEST
 
 class SchemaValidationError(SourceValidationError):
     name = 'schema-validation-failed'
-    detail = "The data you provided failed schema validation. Please consult the documentation for more details."
+    description = "The data you provided failed schema validation. Please consult the documentation for more descriptions."
     status_code = http.client.BAD_REQUEST
 
     def __init__(self, e):
@@ -125,7 +142,7 @@ class SchemaValidationError(SourceValidationError):
 
 class SourceDataWithoutResource(HALLDException):
     name = 'source-data-without-resource'
-    detail = 'You are attempting to view or update source data for a resource that does not exist. You should make sure the resource exists before trying again.'
+    description = 'You are attempting to view or update source data for a resource that does not exist. You should make sure the resource exists before trying again.'
     status_code = http.client.NOT_FOUND
 
     def __init__(self, hrefs):
@@ -144,11 +161,11 @@ class SourceDataWithoutResource(HALLDException):
 
 class SourceValidationFailed(HALLDException):
     name = 'source-validation-failed'
-    detail = 'The source data you uploaded is invalid'
+    description = 'The source data you uploaded is invalid'
 
 class NoSuchSourceType(HALLDException):
     name = 'no-such-source-type'
-    detail = 'There is no such source type'
+    description = 'There is no such source type'
     status_code = http.client.NOT_FOUND
 
     def __init__(self, source_type):
@@ -161,7 +178,7 @@ class NoSuchSourceType(HALLDException):
 
 class NoSuchLinkType(HALLDException):
     name = 'no-such-link-type'
-    detail = 'There is no such link type'
+    description = 'There is no such link type'
     status_code = http.client.NOT_FOUND
 
     def __init__(self, link_type):
@@ -174,7 +191,7 @@ class NoSuchLinkType(HALLDException):
 
 class NoSuchIdentifier(HALLDException):
     name = 'no-such-identifier'
-    detail = 'There is no such identifier'
+    description = 'There is no such identifier'
     status_code = http.client.NOT_FOUND
 
     def __init__(self, scheme, value):
@@ -188,7 +205,7 @@ class NoSuchIdentifier(HALLDException):
 
 class DuplicatedIdentifier(HALLDException):
     name = 'duplicated-identifier'
-    detail = 'The data you supplied implied an identifier that is already assigned to another resource.'
+    description = 'The data you supplied implied an identifier that is already assigned to another resource.'
     status_code = http.client.CONFLICT
 
     def __init__(self, scheme, value):
@@ -212,7 +229,7 @@ class DuplicatedIdentifier(HALLDException):
 
 class ResourceAlreadyExists(HALLDException):
     name = 'resource-already-exists'
-    detail = "You're trying to create a resource that already exists."
+    description = "You're trying to create a resource that already exists."
     status_code = http.client.CONFLICT
 
     def __init__(self, resource_type, identifier):
@@ -227,17 +244,17 @@ class ResourceAlreadyExists(HALLDException):
 
 class MissingContentType(HALLDException):
     name = 'missing-content-type'
-    detail = 'You must supply a Content-Type header.'
+    description = 'You must supply a Content-Type header.'
     status_code = http.client.BAD_REQUEST
 
 class MissingContentLength(HALLDException):
     name = 'missing-content-length'
-    detail = 'You must supply a Content-Length header.'
+    description = 'You must supply a Content-Length header.'
     status_code = http.client.BAD_REQUEST
 
 class UnsupportedContentType(HALLDException):
     name = 'unsupported-content-type'
-    detail = 'You supplied an unsupported Content-Type with your request.'
+    description = 'You supplied an unsupported Content-Type with your request.'
     status_code = http.client.BAD_REQUEST
 
     def __init__(self, content_type, expected_content_type):
@@ -251,27 +268,27 @@ class UnsupportedContentType(HALLDException):
 
 class UnsupportedRequestBodyEncoding(HALLDException):
     name = 'unsupported-request-body-encoding'
-    detail = 'You specified an unsupported request body encoding. Try UTF-8 instead.'
+    description = 'You specified an unsupported request body encoding. Try UTF-8 instead.'
     status_code = http.client.BAD_REQUEST
 
 class InvalidJSON(HALLDException):
     name = 'invalid-json'
-    detail = "The request body you supplied wasn't valid JSON"
+    description = "The request body you supplied wasn't valid JSON"
     status_code = http.client.BAD_REQUEST
 
 class InvalidEncoding(HALLDException):
     name = 'invalid-encoding'
-    detail = "The request body you supplied couldn't be decoded using the expected character encoding."
+    description = "The request body you supplied couldn't be decoded using the expected character encoding."
     status_code = http.client.BAD_REQUEST
 
 class InvalidParameter(HALLDException):
     name = 'invalid-parameter'
-    detail = "You supplied an invalid value for a query parameter."
+    description = "You supplied an invalid value for a query parameter."
     status_code = http.client.BAD_REQUEST
 
 class MissingParameter(HALLDException):
     name = 'missing-parameter'
-    detail = "A required query parameter was missing."
+    description = "A required query parameter was missing."
     status_code = http.client.BAD_REQUEST
 
 class CantReturnTree(HALLDException):
@@ -281,7 +298,7 @@ class CantReturnTree(HALLDException):
 
 class MethodNotAllowed(HALLDException):
     name = 'method-not-allowed'
-    detail = 'The given HTTP method is not allowed'
+    description = 'The given HTTP method is not allowed'
     status_code = http.client.METHOD_NOT_ALLOWED
 
     def __init__(self, method, bad_request=False):
@@ -291,12 +308,12 @@ class MethodNotAllowed(HALLDException):
 
 class Unauthorized(HALLDException):
     name = 'unauthorized'
-    detail = 'You need to authenticate to do that.'
+    description = 'You need to authenticate to do that.'
     status_code = http.client.UNAUTHORIZED
 
 class Forbidden(HALLDException):
     name = 'forbidden'
-    detail = 'You do not have permission to do that.'
+    description = 'You do not have permission to do that.'
     status_code = http.client.FORBIDDEN
 
     def __init__(self, user):
@@ -307,7 +324,7 @@ class Forbidden(HALLDException):
 
 class MultipleErrors(HALLDException):
     name = 'multiple-errors'
-    detail = 'One or more errors occurred processing your request. See inside for more details.'
+    description = 'One or more errors occurred processing your request. See inside for more descriptions.'
     status_code = http.client.BAD_REQUEST
 
     def __init__(self, errors):
@@ -320,6 +337,6 @@ class MultipleErrors(HALLDException):
 
 class CantRegenerateAll(HALLDException):
     name = 'cant-regenerate-all'
-    detail = 'You do not have the necessary privileges to regenerate all resources.'
+    description = 'You do not have the necessary privileges to regenerate all resources.'
     status_code = http.client.FORBIDDEN
 
