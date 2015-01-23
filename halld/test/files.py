@@ -6,11 +6,13 @@ import unittest
 from django.core.urlresolvers import reverse
 from django.contrib.auth.models import User
 import mock
+from rest_framework.test import force_authenticate
 
 from .base import TestCase
 from ..models import Resource, Source
 from ..files.models import ResourceFile
 from ..files import views
+from django.test.client import RequestFactory
 
 class FileTestCase(TestCase):
     def setUp(self):
@@ -29,8 +31,8 @@ class FileTestCase(TestCase):
         super(FileTestCase, self).tearDown()
 
     def create_file_resource(self):
-        request = self.factory.post("/document", {"file": self.test_file})
-        request.user = self.superuser
+        request = self.factory.post("/document", {"file": self.test_file}, content_type='text/plain')
+        force_authenticate(request, self.superuser)
         response = self.file_creation_view(request, "document")
         path = response['Location'][17:]
         identifier = path.split('/')[-1]
@@ -38,8 +40,9 @@ class FileTestCase(TestCase):
 
 class FileCreationViewTestCase(FileTestCase):
     def testPostMultiPart(self):
-        request = self.factory.post("/document", {"file": self.test_file})
-        request.user = self.superuser
+        factory = RequestFactory()
+        request = factory.post("/document", {"file": self.test_file})
+        force_authenticate(request, self.superuser)
         response = self.file_creation_view(request, "document")
         self.check_creation_response(response)
 
