@@ -103,5 +103,11 @@ class SourceList(ResponseData):
 class Source(ResponseData):
     pass
 
+class ResourceTypeList(ResponseData):
+    pass
+
+class ResourceType(ResponseData):
+    pass
+
 class Error(ResponseData):
     pass

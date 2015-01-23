@@ -57,6 +57,13 @@ class HALJSONRenderer(HALLDRenderer):
     def render_source(self, source):
         return self.source_to_hal(source['source'])
 
+    def render_resource_type_list(self, resource_type_list):
+        paginator, page = resource_type_list['paginator'], resource_type_list['page']
+        return self.paginated(paginator, page, self.resource_type_to_hal)
+
+    def render_resource_type(self, resource_type):
+        return self.source_to_hal(resource_type['resource_type'])
+
     def render_error(self, error):
         return dict(error)
 
@@ -90,6 +97,10 @@ class HALJSONRenderer(HALLDRenderer):
             'self': {'href': source.href},
             'resource': {'href': source.resource_id},
         }
+        return data
+
+    def resource_type_to_hal(self, resource_type):
+        data = resource_type.get_type_properties()
         return data
 
     def paginated(self, paginator, page, to_hal_func, objects=None):
