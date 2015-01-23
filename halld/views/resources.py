@@ -1,6 +1,7 @@
 import http.client
 
 from django.db import transaction
+from django.http import HttpResponse
 from rest_framework.response import Response
 import rest_framework.renderers
 
@@ -45,7 +46,9 @@ class ResourceListView(HALLDView):
     @transaction.atomic
     def post(self, request, resource_type):
         resource = Resource.create(request.user, resource_type)
-        return Response('', headers={'Location': resource.href}, status=http.client.CREATED)
+        response = HttpResponse('', status=http.client.CREATED)
+        response['Location'] = resource.href
+        return response
 
 class ResourceDetailView(HALLDView):
     def initial(self, request, resource_type, identifier):
@@ -77,4 +80,6 @@ class ResourceDetailView(HALLDView):
     @transaction.atomic
     def post(self, request, resource_type, identifier):
         resource = Resource.create(request.user, self.resource_type, identifier)
-        return Response('', headers={'Location': resource.href}, status=http.client.CREATED)
+        response = HttpResponse('', status=http.client.CREATED)
+        response['Location'] = resource.href
+        return response

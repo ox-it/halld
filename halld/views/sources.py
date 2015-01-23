@@ -40,7 +40,10 @@ class SourceListView(ChangesetView):
         visible_sources = [source for source in sources
                                   if not source.deleted and
                                      request.user.has_perm('halld.view_source', source)]
-        return Response(response_data.SourceList(sources=visible_sources))
+        paginator, page = self.get_paginator_and_page(visible_sources)
+        return Response(response_data.SourceList(sources=visible_sources,
+                                                 paginator=paginator,
+                                                 page=page))
 
     put_schema = {
         'properties': {
