@@ -46,27 +46,20 @@ class PutUpdate(Update):
         return cls(data['data'])
 
     def __call__(self, author, committer, source):
+        if self.data == source.data:
+            return
         if self.data is None:
             delete_update = DeleteUpdate()
             return delete_update(author, committer, source)
         else:
-            if not committer.has_perm('halld.view_source', source):
-                raise exceptions.Forbidden(committer)
             creating = not source.pk
             was_deleted = source.deleted
             source.deleted = False
-            data = source.filter_data(author, source.data)
-            patch = jsonpatch.make_patch(data, self.data)
-            patch_update = PatchUpdate(patch, True)
-            try:
-                result = patch_update(author, committer, source)
-            except Exception:
-                source.deleted = was_deleted
-                raise
+            source.data = self.data
             if was_deleted or creating:
                 return UpdateResult.created
             else:
-                return result
+                return UpdateResult.modified
 
 class PatchUpdate(Update):
     require_source_exists = False
