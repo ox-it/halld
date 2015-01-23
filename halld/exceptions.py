@@ -11,6 +11,9 @@ class HALLDException(APIException, metaclass=abc.ABCMeta):
     def name(self):
         pass
 
+    def __init__(self):
+        pass
+
     @property
     def detail(self):
         return response_data.Error({
