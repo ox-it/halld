@@ -199,7 +199,7 @@ class SourceListViewTestCase(TestCase):
         _, identifier = self.create_resource()
 
         science_data = {'foo': 'bar', '_meta': {'sourceType': 'science'}}
-        mythology_data = {'baz': 'quux', '_meta': {'sourceType': 'science'}}
+        mythology_data = {'baz': 'quux', '_meta': {'sourceType': 'mythology'}}
         data = {'_embedded': {'item': [science_data, mythology_data]}}
 
         request = self.factory.put('/snake/{}/source'.format(identifier),
@@ -208,6 +208,8 @@ class SourceListViewTestCase(TestCase):
         request.user = self.superuser
         response = self.source_list_view(request, 'snake', identifier)
         self.assertEqual(response.status_code, http.client.NO_CONTENT)
+
+        science_data.pop('_meta'), mythology_data.pop('_meta')
 
         science_source = models.Source.objects.get(type_id='science')
         self.assertEqual(science_source.data, science_data)

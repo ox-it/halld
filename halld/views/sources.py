@@ -87,7 +87,7 @@ class SourceListView(ChangesetView):
                 'method': 'PUT',
                 'sourceType': source_type,
                 'resourceHref': self.resource_href,
-                'data': data,
+                'data': item,
             })
 
         source_types_to_delete = Source.objects.filter(resource_id=self.resource_href) \
