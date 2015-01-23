@@ -1,9 +1,11 @@
 import json
 import unittest
 
-from .base import TestCase
+from rest_framework.test import force_authenticate
 
+from .base import TestCase
 from .. import models
+from .. import response_data
 
 class ResourceListTestCase(TestCase):
     def create_resources(self):
@@ -19,18 +21,18 @@ class ResourceListTestCase(TestCase):
 
     def testGetResourceList(self):
         request = self.factory.get('/snake')
-        request.user = self.anonymous_user
+        force_authenticate(request, self.anonymous_user)
         response = self.resource_list_view(request, 'snake')
-        data = json.loads(response.content.decode())
+        self.assertIsInstance(response.data, response_data.ResourceList)
 
     def testDefunctResources(self):
         self.create_resources()
         request = self.factory.get('/snake?defunct=on&extant=off')
         request.user = self.anonymous_user
         response = self.resource_list_view(request, 'snake')
-        data = json.loads(response.content.decode())
-        self.assertEqual(len(data['_embedded']['item']), 1)
-        self.assertEqual(data['_embedded']['item'][0]['_links']['self']['href'],
+        self.assertIsInstance(response.data, response_data.ResourceList)
+        self.assertEqual(len(response.data['resources']), 1)
+        self.assertEqual(response.data['resources'][0]['self']['href'],
                          self.defunct_resource.href)
 
     def testExtantResources(self):

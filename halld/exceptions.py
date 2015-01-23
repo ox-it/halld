@@ -83,12 +83,12 @@ class LinkTargetDoesNotExist(NoSuchResource):
     description = 'The source data contains a link to a resource that does not exist.'
 
     def __init__(self, link_type, hrefs):
-        super(LinkTargetDoesNotExist, self).__init__(hrefs)
+        super().__init__(hrefs)
         self.link_type = link_type
 
     @property
     def detail(self):
-        data = super().data
+        data = super().detail
         data['linkType'] = self.link_type.name
         return data
 
@@ -108,11 +108,12 @@ class IncompatibleSourceType(HALLDException):
     def __init__(self, resource_type, source_type):
         self.source_type, self.resource_type = source_type, resource_type
 
-    def as_hal(self):
-        hal = super(IncompatibleSourceType, self).as_hal()
-        hal['resourceType'] = self.resource_type
-        hal['sourceType'] = self.source_type
-        return hal
+    @property
+    def detail(self):
+        data = super().detail
+        data['resourceType'] = self.resource_type
+        data['sourceType'] = self.source_type
+        return data
 
 class SourceValidationError(HALLDException):
     name = 'data-validation-failed'
@@ -131,17 +132,18 @@ class SchemaValidationError(SourceValidationError):
         self.schema_path = jsonpointer.JsonPointer.from_parts(e.schema_path).path
         self.schema = e.schema
 
-    def as_hal(self):
-        hal = super(SourceValidationError, self).as_hal()
+    @property
+    def detail(self):
+        data = super().detail
         if self.message is not None:
-            hal['message'] = self.message
+            data['message'] = self.message
         if self.path is not None:
-            hal['path'] = self.path
+            data['path'] = self.path
         if self.schema_path is not None:
-            hal['schemaPath'] = self.schema_path
+            data['schemaPath'] = self.schema_path
         if self.schema is not None:
-            hal['schema'] = self.schema
-        return hal
+            data['schema'] = self.schema
+        return data
 
 class SourceDataWithoutResource(HALLDException):
     name = 'source-data-without-resource'
@@ -153,14 +155,15 @@ class SourceDataWithoutResource(HALLDException):
             hrefs = [hrefs]
         self.hrefs = hrefs
 
-    def as_hal(self):
-        hal = super(SourceDataWithoutResource, self).as_hal()
-        hal['_links'] = {
+    @property
+    def detail(self):
+        data = super().detail
+        data['_links'] = {
             'missingResources': [{
                 'href': href,
             } for href in self.hrefs],
         }
-        return hal
+        return data
 
 class SourceValidationFailed(HALLDException):
     name = 'source-validation-failed'
@@ -174,10 +177,11 @@ class NoSuchSourceType(HALLDException):
     def __init__(self, source_type):
         self.source_type = source_type
 
-    def as_hal(self):
-        hal = super(NoSuchSourceType, self).as_hal()
-        hal['sourceType'] = list(self.source_type)
-        return hal
+    @property
+    def detail(self):
+        data = super().detail
+        data['sourceType'] = list(self.source_type)
+        return data
 
 class NoSuchLinkType(HALLDException):
     name = 'no-such-link-type'
@@ -187,10 +191,11 @@ class NoSuchLinkType(HALLDException):
     def __init__(self, link_type):
         self.link_type = link_type
 
-    def as_hal(self):
-        hal = super(NoSuchLinkType, self).as_hal()
-        hal['linkType'] = list(self.link_type)
-        return hal
+    @property
+    def detail(self):
+        data = super().detail
+        data['linkType'] = list(self.link_type)
+        return data
 
 class NoSuchIdentifier(HALLDException):
     name = 'no-such-identifier'
@@ -200,11 +205,12 @@ class NoSuchIdentifier(HALLDException):
     def __init__(self, scheme, value):
         self.scheme, self.value = scheme, value
 
-    def as_hal(self):
-        hal = super(NoSuchIdentifier, self).as_hal()
-        hal['scheme'] = self.scheme
-        hal['value'] = self.value
-        return hal
+    @property
+    def detail(self):
+        data = super().detail
+        data['scheme'] = self.scheme
+        data['value'] = self.value
+        return data
 
 class DuplicatedIdentifier(HALLDException):
     name = 'duplicated-identifier'
@@ -214,21 +220,22 @@ class DuplicatedIdentifier(HALLDException):
     def __init__(self, scheme, value):
         self.scheme, self.value = scheme, value
 
-    def as_hal(self):
-        hal = super(DuplicatedIdentifier, self).as_hal()
-        hal['scheme'] = self.scheme
-        hal['value'] = self.value
+    @property
+    def detail(self):
+        data = super().detail
+        data['scheme'] = self.scheme
+        data['value'] = self.value
         try:
             from .models import Identifier
-            hal['_links'] = {'resource': Identifier.objects.get(scheme=self.scheme,
+            data['_links'] = {'resource': Identifier.objects.get(scheme=self.scheme,
                                                                 value=self.value).resource_id}
         except Identifier.DoesNotExist:
             # User was likely uploading two things with the same identifier,
             # as opposed to there already being something we knew about with
             # the provided identifier. There's no way we're going to be able
-            # to work out the resource href for the thing it clased with.
+            # to work out the resource href for the thing it clashed with.
             pass
-        return hal
+        return data
 
 class ResourceAlreadyExists(HALLDException):
     name = 'resource-already-exists'
@@ -239,11 +246,12 @@ class ResourceAlreadyExists(HALLDException):
         self.resource_type = resource_type
         self.identifier = identifier
 
-    def as_hal(self):
-        hal = super(ResourceAlreadyExists, self).as_hal()
-        hal['resource_type'] = self.resource_type.name
-        hal['identifier'] = self.identifier
-        return hal
+    @property
+    def detail(self):
+        data = super().detail
+        data['resource_type'] = self.resource_type.name
+        data['identifier'] = self.identifier
+        return data
 
 class MissingContentType(HALLDException):
     name = 'missing-content-type'
@@ -263,11 +271,12 @@ class UnsupportedContentType(HALLDException):
     def __init__(self, content_type, expected_content_type):
         self.content_type, self.expected_content_type = content_type, expected_content_type
 
-    def as_hal(self):
-        hal = super(UnsupportedContentType, self).as_hal()
-        hal['contentType'] = self.content_type
-        hal['expectedContentType'] = self.expected_content_type
-        return hal
+    @property
+    def detail(self):
+        data = super().detail
+        data['contentType'] = self.content_type
+        data['expectedContentType'] = self.expected_content_type
+        return data
 
 class UnsupportedRequestBodyEncoding(HALLDException):
     name = 'unsupported-request-body-encoding'
@@ -333,10 +342,11 @@ class MultipleErrors(HALLDException):
     def __init__(self, errors):
         self.errors = errors
 
-    def as_hal(self):
-        hal = super(MultipleErrors, self).as_hal()
-        hal['_embedded'] = {'error': [error.as_hal() for error in self.errors]}
-        return hal
+    @property
+    def detail(self):
+        data = super().detail
+        data['_embedded'] = {'error': [error.detail for error in self.errors]}
+        return data
 
 class CantRegenerateAll(HALLDException):
     name = 'cant-regenerate-all'

@@ -62,7 +62,7 @@ class HALJSONRenderer(HALLDRenderer):
         return self.paginated(paginator, page, self.resource_type_to_hal)
 
     def render_resource_type(self, resource_type):
-        return self.source_to_hal(resource_type['resource_type'])
+        return self.resource_type_to_hal(resource_type['resource_type'])
 
     def render_error(self, error):
         return dict(error)

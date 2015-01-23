@@ -26,7 +26,7 @@ class ChangesetTestCase(TestCase):
             self.changeset_list_view(request)
 
         self.assertEqual(cm.exception.status_code, http.client.BAD_REQUEST)
-        error_json = cm.exception.as_hal()
+        error_json = cm.exception.detail
         self.assertEqual(error_json['error'], 'multiple-errors')
         self.assertEqual(error_json['_embedded']['error'][0]['error'],
                          'incompatible-source-type')
@@ -49,6 +49,6 @@ class ChangesetTestCase(TestCase):
 
         with self.assertRaises(exceptions.SourceDataWithoutResource) as cm:
             self.changeset_list_view(request)
-        error_json = cm.exception.as_hal()
+        error_json = cm.exception.detail
         self.assertEqual(error_json['_links']['missingResources'],
                          [{'href': href}])

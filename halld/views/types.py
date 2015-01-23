@@ -12,7 +12,7 @@ class ResourceTypeView(HALLDView):
 
 class ResourceTypeListView(ResourceTypeView):
     def get(self, request, *args, **kwargs):
-        return Response(response_data.ResourceTypeList(self.halld_config.resource_types))
+        return Response(response_data.ResourceTypeList(resource_types=self.halld_config.resource_types))
 
 class ResourceTypeDetailView(ResourceTypeView):
     def initial(self, request, resource_type):
@@ -23,5 +23,5 @@ class ResourceTypeDetailView(ResourceTypeView):
             raise Http404
 
     def get(self, request, resource_type):
-        return Response(response_data.ResourceType(self.response_type))
+        return Response(response_data.ResourceType(resource_type=self.resource_type))
 

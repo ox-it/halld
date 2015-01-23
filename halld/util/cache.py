@@ -42,20 +42,7 @@ class ResourceCache(BaseCache):
     Model = models.Resource
 
     def __init__(self, object_cache, user):
-        self.user = user
         super(ResourceCache, self).__init__(object_cache)
-
-    def get_hal(self, href, exclude_links=False):
-        resource = self.get(href)
-        cache_key = 'halld:hal:{0}:{1}'.format(self.user.username,
-                                               sha256(resource.href.encode('utf-8')).hexdigest())
-        hal = cache.get(cache_key)
-        if hal and hal['_meta']['version'] == resource.version:
-            return hal
-        
-        hal = resource.get_hal(self.user, self.object_cache, exclude_links=exclude_links)
-        cache.set(cache_key, hal)
-        return hal
 
 class ObjectCache(object):
     def __init__(self, user):
