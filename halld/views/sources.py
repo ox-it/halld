@@ -15,6 +15,7 @@ from .. import exceptions, get_halld_config
 from .. import response_data
 from ..models import Source, Resource, Changeset
 from .changeset import ChangesetView
+import jsonschema
 
 __all__ = ['SourceListView', 'SourceDetailView']
 
@@ -41,19 +42,42 @@ class SourceListView(ChangesetView):
                                      request.user.has_perm('halld.view_source', source)]
         return Response(response_data.SourceList(sources=visible_sources))
 
+    put_schema = {
+        'properties': {
+            '_embedded': {
+                'type': 'object',
+                'additionalProperties': False,
+                'properties': {
+                    'item': {
+                        'type': 'array',
+                        'items': {
+                            'type': 'object',
+                            'properties': {
+                                '_meta': {
+                                    'type': 'object',
+                                    'properties': {
+                                        'sourceType': {'type': 'string'},
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            }
+        },
+    }
 
     def put(self, request, resource_type, identifier):
         data = self.get_request_json('application/hal+json')
+        try:
+            jsonschema.validate(data, self.put_schema)
+        except jsonschema.ValidationError as e:
+            raise exceptions.SchemaValidationError(e)
         items = data.get('_embedded', {}).get('item')
-        if not isinstance(items, dict):
-            raise HttpBadRequest
 
         updates, source_types = [], set()
         for item in items:
-            try:
-                source_type = item['_meta']['sourceType']
-            except KeyError:
-                raise HttpBadRequest
+            source_type = item['_meta']['sourceType']
 
             source_types.add(source_type)
             item.pop('_links', None)
@@ -67,12 +91,12 @@ class SourceListView(ChangesetView):
             })
 
         source_types_to_delete = Source.objects.filter(resource_id=self.resource_href) \
-                                               .exclude(source_id__in=source_types).values('source_id')
+                                               .exclude(type_id__in=source_types).values('type_id')
 
         for source_type in source_types_to_delete:
             updates.append({
                 'method': 'DELETE',
-                'sourceType': source_type,
+                'sourceType': source_type['type_id'],
                 'resourceHref': self.resource_href,
             })
 
@@ -96,7 +120,7 @@ class SourceDetailView(VersioningMixin, ChangesetView):
         if self.check_version(source) is True:
             return HttpResponseNotModified()
         if source.deleted:
-            raise HttpGone
+            raise exceptions.SourceDeleted
         data = source.get_hal(request.user)
         response = HttpResponse(json.dumps(data, indent=2, sort_keys=True),
                                 content_type='application/hal+json')

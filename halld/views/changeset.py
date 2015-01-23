@@ -33,5 +33,5 @@ class RegenerateAllView(ChangesetView):
         changeset = self.get_new_changeset({'description': 'Regenerate all (POST)',
                                             'regenerateAll': True})
         changeset.perform(multiple=True,
-                          object_cache=self.object_cache)
+                          object_cache=request.object_cache)
         return HttpResponse(status=http.client.NO_CONTENT)

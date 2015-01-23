@@ -7,6 +7,8 @@ from django.contrib.auth.models import User
 
 from .base import TestCase
 from .. import exceptions, models, views
+from .. import response_data
+from rest_framework.test import force_authenticate
 
 class SourceManipulationTestCase(TestCase):
     def testGetUncreatedSource(self):
@@ -71,9 +73,8 @@ class SourceManipulationTestCase(TestCase):
         # Check it's gone
         request = self.factory.get('/snake/{}/source/science'.format(identifier))
         request.user = self.superuser
-        response = self.source_detail_view(request, 'snake', identifier, 'science')
-
-        self.assertEqual(response.status_code, http.client.GONE)
+        with self.assertRaises(exceptions.SourceDeleted):
+            response = self.source_detail_view(request, 'snake', identifier, 'science')
 
         # Recreate it
         request = self.factory.put('/snake/{}/source/science'.format(identifier),
@@ -171,8 +172,9 @@ class SourceListViewTestCase(TestCase):
         request = self.factory.get('/snake/{}/source'.format(identifier))
         request.user = self.superuser
         response = self.source_list_view(request, 'snake', identifier)
-        data = json.loads(response.content.decode())
-        self.assertEqual(data, {'_embedded': {}})
+        self.assertIsInstance(response.data, response_data.SourceList)
+        self.assertIsInstance(response.data.get('sources'), list)
+        self.assertEqual(len(response.data['sources']), 0)
 
     def testGetWithOne(self):
         _, identifier = self.create_resource()
@@ -182,25 +184,23 @@ class SourceListViewTestCase(TestCase):
         request = self.factory.put('/snake/{}/source/science'.format(identifier),
                                    data=json.dumps(data),
                                    content_type='application/hal+json')
-        request.user = self.superuser
+        force_authenticate(request, self.superuser)
         self.source_detail_view(request, 'snake', identifier, 'science')
 
         request = self.factory.get('/snake/{}/source'.format(identifier))
-        request.user = self.superuser
+        force_authenticate(request, self.superuser)
         response = self.source_list_view(request, 'snake', identifier)
-        source_list = json.loads(response.content.decode())
-        # We don't care about the metadata or links
-        source_list['_embedded']['source:science'].pop('_meta')
-        source_list['_embedded']['source:science'].pop('_links')
-        self.assertEqual(source_list, {'_embedded': {'source:science': data}})
+        self.assertIsInstance(response.data, response_data.SourceList)
+        self.assertEqual(len(response.data['sources']), 1)
+        source = response.data['sources'][0]
+        self.assertEqual(source.data, data)
 
     def testPutMultiple(self):
         _, identifier = self.create_resource()
 
-        science_data = {'foo': 'bar'}
-        mythology_data = {'baz': 'quux'}
-        data = {'_embedded': {'source:science': science_data,
-                              'source:mythology': mythology_data}}
+        science_data = {'foo': 'bar', '_meta': {'sourceType': 'science'}}
+        mythology_data = {'baz': 'quux', '_meta': {'sourceType': 'science'}}
+        data = {'_embedded': {'item': [science_data, mythology_data]}}
 
         request = self.factory.put('/snake/{}/source'.format(identifier),
                                    data=json.dumps(data),
@@ -228,7 +228,7 @@ class SourceListViewTestCase(TestCase):
         self.source_detail_view(request, 'snake', identifier, 'science')
 
         request = self.factory.put('/snake/{}/source'.format(identifier),
-                                   data=json.dumps({'_embedded': {'source:science': None}}),
+                                   data=json.dumps({'_embedded': {'item': []}}),
                                    content_type='application/hal+json')
         request.user = self.superuser
         response = self.source_list_view(request, 'snake', identifier)

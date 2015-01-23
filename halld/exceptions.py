@@ -16,6 +16,10 @@ class HALLDException(APIException, metaclass=abc.ABCMeta):
             'detail': self.detail,
         }
 
+class SourceDeleted(APIException):
+    name = 'source-deleted'
+    status_code = http.client.GONE
+
 class CannotAssignIdentifier(HALLDException):
     name = 'cannot-assign-identifier'
     detail = 'You are not permitted to assign identifiers for this type of resource. POST against the resource collection to have one assigned.'
