@@ -2,6 +2,7 @@ from django.core.exceptions import PermissionDenied
 from django.utils.functional import cached_property
 
 from halld import get_halld_config
+from django.core.urlresolvers import reverse
 
 class ResponseData(dict):
     property_keys = set()
@@ -39,6 +40,8 @@ class Resource(ResponseData):
     @cached_property
     def data(self):
         from . import exceptions
+        from halld.files.models import ResourceFile
+        from halld.files.definitions.resources import FileResourceTypeDefinition
         data = self['resource'].get_filtered_data(self['user'])
 
         data['_extant'] = self['resource'].extant
@@ -86,6 +89,14 @@ class Resource(ResponseData):
         else:
             for link_type in self.halld_config.link_types.values():
                 data.pop(link_type.name, None)
+
+        if isinstance(self['resource'].get_type(), FileResourceTypeDefinition):
+            data['describes'] = {
+                'href': reverse('halld-files:file-detail',
+                                args=[self['resource'].type_id,
+                                      self['resource'].identifier]),
+                'type': ResourceFile.objects.get(resource=self['resource']).content_type,
+            }
 
         if self.get('include_source_links', True):
             data['findSource'] = {'href': self['resource'].href + '/source/{sourceName}',

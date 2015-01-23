@@ -79,7 +79,7 @@ class HALJSONRenderer(HALLDRenderer):
                     embedded[link_name] = link_items
                 else:
                     links[link_name] = link_items
-        for name in ('self', 'findSource', 'sourceList'):
+        for name in ('self', 'findSource', 'sourceList', 'describes'):
             if name in data:
                 links[name] = data.pop(name)
         data['_links'] = links
