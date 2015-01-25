@@ -235,7 +235,7 @@ class SourceListViewTestCase(TestCase):
         self.assertEqual(response.status_code, http.client.NO_CONTENT)
 
         science_source = models.Source.objects.get(type_id='science')
-        self.assertEqual(science_source.data, {})
+        self.assertEqual(science_source.data, None)
         self.assertEqual(science_source.version, 2)
         self.assertEqual(science_source.deleted, True)
 
@@ -249,6 +249,7 @@ class SourceTestCase(TestCase):
                                committer=self.superuser,
                                data={'foo': 'bar'})
         source.save()
+        self.assertEqual(source.deleted, False)
         self.assertEqual(resource.extant, True)
         self.assertEqual(resource.data.get('foo'), 'bar')
 
@@ -260,7 +261,7 @@ class SourceTestCase(TestCase):
                                committer=self.superuser,
                                data={'foo': 'bar'})
         source.save()
-        source.deleted = True
+        source.data = None
         source.save()
         self.assertEqual(resource.extant, False)
 

@@ -383,18 +383,18 @@ class Source(models.Model, StaleFieldsMixin):
     def save(self, *args, **kwargs):
         original_values = {name: self._original_state[name] for name in self.stale_fields}
         cascade_to_resource = kwargs.pop('cascade_to_resource', True)
-        if not self.href:
+        created = not self.href
+        if created:
             self.href = self.resource_id + '/source/' + self.type_id
 
-        if self.data is None:
-            self.deleted = True
+        self.deleted = self.data is None
 
-        if 'data' in original_values:
+        if created or 'data' in original_values:
             self.version += 1
             self.created = self.created or now()
             self.modified = now()
             super().save(*args, **kwargs)
-            if original_values['data'] is None:
+            if created or original_values['data'] is None:
                 signals.source_created.send(self)
             elif self.deleted:
                 signals.source_deleted.send(self)
