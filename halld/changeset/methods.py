@@ -82,18 +82,6 @@ class PatchUpdate(Update):
         if source.deleted:
             raise exceptions.CantPatchDeletedSource
 
-        if not source.patch_acceptable(committer, self.patch):
-            raise exceptions.PatchUnacceptable
-
-        # The effect of applying the patch should be the same regardless of
-        # whether it's applied before or after filtering. This ensures the
-        # committer isn't trying to change something that would ordinarily
-        # be filtered.
-        filtered_patched = source.filter_data(committer, jsonpatch.apply_patch(source.data, self.patch))
-        patched_filtered = jsonpatch.apply_patch(source.filter_data(committer, source.data), self.patch)
-        if filtered_patched != patched_filtered:
-            raise exceptions.PatchUnacceptable
-
         data = jsonpatch.apply_patch(source.data, self.patch)
         source.validate_data(data)
         source.data = data
@@ -111,7 +99,6 @@ class DeleteUpdate(Update):
         if not committer.has_perm('halld.delete_source', source):
             raise exceptions.Forbidden(committer)
         if not source.deleted:
-            source.deleted = True
             source.data = None
             return UpdateResult.deleted
 

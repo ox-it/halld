@@ -124,12 +124,7 @@ class SourceDetailView(VersioningMixin, ChangesetView):
             return HttpResponseNotModified()
         if source.deleted:
             raise exceptions.SourceDeleted
-        data = source.get_hal(request.user)
-        response = HttpResponse(json.dumps(data, indent=2, sort_keys=True),
-                                content_type='application/hal+json')
-        response['Last-Modified'] = wsgiref.handlers.format_date_time(mktime(source.modified.timetuple()))
-        response['ETag'] = source.get_etag()
-        return response
+        return Response(response_data.Source(source=source))
 
     def put(self, request, resource_type, identifier, source_type, **kwargs):
         hal = self.get_request_json('application/hal+json')

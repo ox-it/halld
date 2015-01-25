@@ -1,3 +1,5 @@
+import copy
+
 from django.core.exceptions import PermissionDenied
 from django.utils.functional import cached_property
 
@@ -112,7 +114,16 @@ class SourceList(ResponseData):
     pass
 
 class Source(ResponseData):
-    pass
+    property_keys = {'data'}
+
+    @cached_property
+    def data(self):
+        data = copy.deepcopy(self['source'].data)
+        data['_meta'] = {'created': self['source'].created.isoformat(),
+                        'modified': self['source'].modified.isoformat(),
+                        'version': self['source'].version,
+                        'sourceType': self['source'].type_id}
+        return data
 
 class ResourceTypeList(ResponseData):
     pass

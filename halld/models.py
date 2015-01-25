@@ -263,6 +263,8 @@ class Resource(models.Model, StaleFieldsMixin):
         data['stableIdentifier'].update(self.get_type().get_identifiers(self, data))
         data['stableIdentifier'][self.type_id] = self.identifier
         for source in self.cached_source_set:
+            if source.deleted:
+                continue
             if isinstance(source.data.get('identifier'), str):
                 data['stableIdentifier']['source:{}'.format(source.type_id)] = source.data['identifier']
         # Don't copy type name identifiers
@@ -362,27 +364,15 @@ class Source(models.Model, StaleFieldsMixin):
     created = models.DateTimeField(auto_now_add=True)
     modified = models.DateTimeField(auto_now=True)
 
-    data = JSONField(default={}, blank=True)
+    data = JSONField(default=None, blank=True)
     version = models.PositiveIntegerField(default=0)
-    deleted = models.BooleanField(default=False)
+    deleted = models.BooleanField(default=True)
 
     def get_etag(self):
         return hashlib.sha1("{}/{}".format(self.href, self.version).encode()).hexdigest()
 
-    def filter_data(self, user, data=None):
-        data = data if data is not None else self.data
-        if user.is_superuser:
-            return data
-        return self.get_type().filter_data(user, self, data)
-
-    def patch_acceptable(self, user, patch):
-        return self.get_type().patch_acceptable(user, self, patch)
-
     def validate_data(self, data):
         return self.get_type().validate_data(self, data)
-    
-    def get_hal(self, user):
-        return self.get_type().get_hal(self, self.filter_data(user))
 
     def get_absolute_url(self):
         return reverse('halld:source-detail', args=[self.resource.type, self.resource.identifier, self.type_id])
@@ -391,36 +381,30 @@ class Source(models.Model, StaleFieldsMixin):
         return get_halld_config().source_types[self.type_id]
 
     def save(self, *args, **kwargs):
-        created = not self.pk
-        changed_values = self.get_changed_values()
+        original_values = {name: self._original_state[name] for name in self.stale_fields}
         cascade_to_resource = kwargs.pop('cascade_to_resource', True)
         if not self.href:
             self.href = self.resource_id + '/source/' + self.type_id
 
-        if 'deleted' in changed_values:
-            if self.deleted:
-                changed_values['data'], self.data = self.data, {}
-            elif not self.deleted:
-                # Special-case resurrecting old Sources
-                created = True
-                changed_values['data'] = {}
+        if self.data is None:
+            self.deleted = True
 
-        if created or 'data' in changed_values:
+        if 'data' in original_values:
             self.version += 1
             self.created = self.created or now()
             self.modified = now()
-            super(Source, self).save(*args, **kwargs)
-            if created:
+            super().save(*args, **kwargs)
+            if original_values['data'] is None:
                 signals.source_created.send(self)
-            elif 'deleted' in changed_values:
+            elif self.deleted:
                 signals.source_deleted.send(self)
             else:
-                signals.source_changed.send(self, old_data=changed_values['data'])
+                signals.source_changed.send(self, old_data=original_values['data'])
             if cascade_to_resource:
                 del self.resource.cached_source_set
                 self.resource.save()
         elif self.is_stale:
-            super(Source, self).save(*args, **kwargs)
+            super().save(*args, **kwargs)
 
     # Override so we can compare sources before we save and set the PK
     def __eq__(self, other):
