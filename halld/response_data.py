@@ -87,7 +87,7 @@ class Resource(ResponseData):
                     link_names.add(link_name)
             for link_name in link_names:
                 if isinstance(data.get(link_name), list):
-                    data[link_name].sort(key=lambda link: link.get('title'))
+                    data[link_name].sort(key=lambda link: link.get('title', ''))
         else:
             for link_type in self.halld_config.link_types.values():
                 data.pop(link_type.name, None)
