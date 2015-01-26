@@ -118,7 +118,7 @@ class FileViewTestCase(FileTestCase):
         request = factory.post(path + '/file',
                                {'content_type': 'text/x-rst',
                                 'file': self.another_file})
-        request.user = self.superuser
+        force_authenticate(request, self.superuser)
         response = self.file_detail_view(request, 'document', identifier)
         self.assertEqual(response.status_code, http.client.NO_CONTENT)
         resource_file = ResourceFile.objects.get()
