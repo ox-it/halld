@@ -68,6 +68,10 @@ class HALJSONRenderer(HALLDRenderer):
     def render_by_identifier(self, by_identifier):
         hal = {}
         for identifier, result in by_identifier['results'].items():
+            if not result:
+                hal[identifier] = None
+                continue
+
             resource = response_data.Resource(resource=result['resource'],
                                               object_cache=by_identifier['object_cache'],
                                               user=by_identifier['user'],
