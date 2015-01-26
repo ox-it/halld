@@ -69,8 +69,8 @@ class HALJSONRenderer(HALLDRenderer):
         hal = {}
         for identifier, result in by_identifier['results'].items():
             resource = response_data.Resource(resource=result['resource'],
-                                              object_cache=self['object_cache'],
-                                              user=self['user'],
+                                              object_cache=by_identifier['object_cache'],
+                                              user=by_identifier['user'],
                                               include_source_links=False)
 
             hal[identifier] = {'type': result['resource'].type_id,
@@ -84,7 +84,7 @@ class HALJSONRenderer(HALLDRenderer):
                         sources[source_type] = self.source_to_hal(source)
                     else:
                         sources[source_type] = None
-            if self.get('include_data'):
+            if by_identifier.get('include_data'):
                 hal[identifier]['data'] = self.resource_to_hal(resource),
         return hal
 
