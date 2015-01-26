@@ -84,12 +84,11 @@ class HALJSONRenderer(HALLDRenderer):
                 hal[identifier]['sources'] = sources = {}
                 for source_type, source in result['sources'].items():
                     if source:
-                        source = response_data.Source(source=source)
                         sources[source_type] = self.source_to_hal(source)
                     else:
                         sources[source_type] = None
             if by_identifier.get('include_data'):
-                hal[identifier]['data'] = self.resource_to_hal(resource),
+                hal[identifier]['data'] = self.resource_to_hal(resource.data),
         return hal
 
     def render_error(self, error):
