@@ -131,5 +131,8 @@ class ResourceTypeList(ResponseData):
 class ResourceType(ResponseData):
     pass
 
+class ByIdentifier(ResponseData):
+    pass
+
 class Error(ResponseData):
     pass

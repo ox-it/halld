@@ -5,6 +5,7 @@ from django.core.urlresolvers import reverse
 
 from .base import HALLDRenderer
 from .. import exceptions
+from .. import response_data
 
 class HALJSONRenderer(HALLDRenderer):
     media_type = 'application/hal+json'
@@ -63,6 +64,29 @@ class HALJSONRenderer(HALLDRenderer):
 
     def render_resource_type(self, resource_type):
         return self.resource_type_to_hal(resource_type['resource_type'])
+
+    def render_by_identifier(self, by_identifier):
+        hal = {}
+        for identifier, result in by_identifier['results'].items():
+            resource = response_data.Resource(resource=result['resource'],
+                                              object_cache=self['object_cache'],
+                                              user=self['user'],
+                                              include_source_links=False)
+
+            hal[identifier] = {'type': result['resource'].type_id,
+                               'identifier': result['resource'].identifier,
+                               'resourceHref': result['resource'].href}
+            if 'sources' in result:
+                hal[identifier]['sources'] = sources = {}
+                for source_type, source in result['sources'].items():
+                    if source:
+                        source = response_data.Source(source=source)
+                        sources[source_type] = self.source_to_hal(source)
+                    else:
+                        sources[source_type] = None
+            if self.get('include_data'):
+                hal[identifier]['data'] = self.resource_to_hal(resource),
+        return hal
 
     def render_error(self, error):
         return dict(error)

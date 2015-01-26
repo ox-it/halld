@@ -35,5 +35,8 @@ class JSONLDRenderer(HALLDRenderer):
     def render_resource_type(self, resource_type):
         pass
 
+    def render_by_identifier(self, by_identifier):
+        pass
+
     def render_error(self, error):
         pass

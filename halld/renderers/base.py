@@ -22,6 +22,7 @@ class HALLDRenderer(BaseRenderer, metaclass=abc.ABCMeta):
         response_data.Source: 'render_source',
         response_data.ResourceTypeList: 'render_resource_type_list',
         response_data.ResourceType: 'render_resource_type',
+        response_data.ByIdentifier: 'render_by_identifier',
         response_data.Error: 'render_error',
     }
 
@@ -31,7 +32,7 @@ class HALLDRenderer(BaseRenderer, metaclass=abc.ABCMeta):
     render_source_list = abc.abstractmethod(lambda source_list: None)
     render_source = abc.abstractmethod(lambda source: None)
     render_resource_type_list = abc.abstractmethod(lambda resource_type_list: None)
-    render_resource_type = abc.abstractmethod(lambda resource_type: None)
+    render_by_identifier = abc.abstractmethod(lambda by_identifier: None)
     render_error = abc.abstractmethod(lambda error: None)
 
     def render_response_data(self, data):
