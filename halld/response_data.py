@@ -59,11 +59,11 @@ class Resource(ResponseData):
                     if not link_item:
                         continue
                     try:
-                        other_resource = self.copy()
-                        other_resource.update(resource=self['object_cache'].resource.get(link_item['href']),
+                        other_data = Resource(resource=self['object_cache'].resource.get(link_item['href']),
                                               include_links=False,
-                                              include_source_links=False)
-                        other_data = Resource(other_resource).data
+                                              include_source_links=False,
+                                              user=self['user'],
+                                              object_cache=self['object_cache']).data
                     except (exceptions.NoSuchResource, PermissionDenied):
                         continue
                     if link_type.embed:

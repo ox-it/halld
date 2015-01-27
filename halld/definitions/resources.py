@@ -93,7 +93,7 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
                              ResourceType.objects.get(name=self.name))
 
     def get_filtered_data(self, resource, user, data):
-        return data
+        return copy.deepcopy(data)
 
     def normalize_links(self, resource, data, **kwargs):
         """
