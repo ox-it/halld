@@ -1,7 +1,9 @@
+import collections
 import hashlib
 import json
 
 from django.http import HttpResponse
+from django_conneg.decorators import renderer
 
 try:
     import pydot
@@ -10,52 +12,24 @@ except ImportError:
 
 from .base import HALLDView
 from .. import exceptions
+from ..hal import DefunctStrategy
 from ..models import Resource
 
 __all__ = ['GraphView']
 
-base_query = """
-WITH RECURSIVE search_graph(href, type_id, data, depth, href_path, link_type_path, extant, link_extant, cycle) AS (
-    SELECT r.href, r.type_id, r.data, 0,
-        ARRAY[r.href::text],
-        ARRAY[]::text[],
-        r.extant,
-        NULL::boolean,
-        false
-    FROM halld_resource r
-    WHERE {initial_where_clause}
-  UNION ALL
-    SELECT r.href, r.type_id, r.data, sg.depth+1,
-        (href_path || ARRAY[r.href::text]),
-        (link_type_path || ARRAY[l.type_id]::text[]),
-        r.extant,
-        l.extant,
-        r.href = ANY(href_path)
-    FROM halld_resource r, halld_link l, search_graph sg
-    WHERE l.passive_id = r.href AND l.active_id = sg.href AND NOT cycle AND {iterative_where_clause}
-)
-SELECT * FROM search_graph {limit_clause} {offset_clause}
-"""
-
-
-
 class GraphView(HALLDView):
-    """
-    Uses a `CTE <http://www.postgresql.org/docs/8.4/static/queries-with.html>`_
-    to retrieve the transitive closure over a set of relations.
-    """
-    
     def get(self, request):
         roots = tuple(map(request.build_absolute_uri, request.GET.getlist('root')))
-        links = tuple(request.GET.getlist('link'))
-        types = tuple(request.GET.getlist('type'))
-        start_types = tuple(request.GET.getlist('startType', types))
-        include_unlinked = 'includeUnlinked' in request.GET
+        links = set(request.GET.getlist('link'))
+        links.discard('self')
+        types = set(request.GET.getlist('type'))
         return_tree = 'tree' in request.GET
+        exclude_extant = request.GET.get('extant', 'on') == 'off'
+        exclude_defunct = request.GET.get('defunct', 'off') == 'off'
 
         limit = self.get_integer_param(request, 'limit')
         offset = self.get_integer_param(request, 'offset')
-        depth = self.get_integer_param(request, 'depth')
+        depth = self.get_integer_param(request, 'depth', 10)
 
         if not links:
             raise exceptions.MissingParameter('link', 'You must supply one or more link names.')
@@ -68,59 +42,40 @@ class GraphView(HALLDView):
         if return_tree and (len(links) > 1 or not link_type.inverse_functional):
             raise exceptions.CantReturnTree()
 
-        initial_where_clause, initial_where_params = [], []
-        iterative_where_clause, iterative_where_params = [], []
-        
-        if roots:
-            initial_where_clause.append("r.href IN %s")
-            initial_where_params.append(roots)
-        else:
-            initial_where_clause.append("NOT EXISTS (SELECT 1 FROM halld_link l WHERE l.passive_id = r.href AND l.type_id IN %s)")
-            initial_where_params.append(links)
-        if not include_unlinked:
-            initial_where_clause.append("EXISTS (SELECT 1 FROM halld_link l WHERE l.active_id = r.href AND l.type_id IN %s)")
-            initial_where_params.append(links)
-        if start_types:
-            initial_where_clause.append("r.type_id IN %s")
-            initial_where_params.append(start_types)
-        if depth:
-            iterative_where_clause.append("sg.depth <= %s")
-            iterative_where_params.append(depth)
-        if types:
-            iterative_where_clause.append("r.type_id IN %s")
-            iterative_where_params.append(types)
-        
-        iterative_where_clause.append("l.type_id IN %s")
-        iterative_where_params.append(links)
-        
-        params = initial_where_params + iterative_where_params
-        
-        if limit:
-            limit_clause = 'LIMIT %s'
-            params.append(limit)
-        else:
-            limit_clause = ''
-        if offset:
-            offset_clause = 'OFFSET %s'
-            params.append(offset)
-        else:
-            offset_clause = ''
+        resources, seen, start = [], set(), set(roots)
+        for i in range(depth):
+            new_resources = self.object_cache.resource.get_many(start - seen)
+            if types:
+                new_resources = (r for r in new_resources if r.type_id in types)
+            if not new_resources:
+                break
+            if exclude_extant:
+                new_resources = (r for r in new_resources if not r.extant)
+            if exclude_defunct:
+                new_resources = (r for r in new_resources if r.extant)
+            new_resources = list(new_resources)
+            resources.extend(new_resources)
+            seen.update(start)
+            start = set()
+            for resource in new_resources:
+                resource.depth = i
+                resource_data = resource.filter_data(request.user)
+                for link in links:
+                    for rel in resource_data.get(link, ()):
+                        start.add(rel['href'])
 
-        query = base_query.format(initial_where_clause=' AND '.join(initial_where_clause),
-                                  iterative_where_clause=' AND '.join(iterative_where_clause),
-                                  limit_clause=limit_clause,
-                                  offset_clause=offset_clause)
+        links.update(['defunct:' + l for l in links])
 
-        resources = Resource.objects.raw(query, params)
-        
         self.context.update({
             'resources': resources,
             'return_tree': return_tree,
+            'links': links,
+            'seen': seen,
         })
         return self.render()
 
-    #@renderer(format='hal', mimetypes=('application/hal+json',), name='HAL/JSON')
-    def render_hal(self, request, context, template_name):
+    def hal_json_from_context(self, request, context):
+        hal_output = self.object_cache.resource.hal_output.copy(defunct_strategy=DefunctStrategy.PROPERTY)
         links = {
             'root': [],
             'addLinkType': {'href': request.get_full_path() + '&link={linkType}',
@@ -133,27 +88,24 @@ class GraphView(HALLDView):
                               'templated': True},
             'self': request.get_full_path(),
         }
-        item_links = {}
         embedded_items = []
         hal = {
             '_links': links,
             '_embedded': {'item': embedded_items},
         }
         for resource in context['resources']:
-            self_href = {'href': resource.href}
-            data = resource.filter_data(request.user, resource.data)
-            item = resource.get_hal(request.user, data, with_links=False)
-            item_links[resource.href] = item['_links'] = {
-                'self': self_href,
-            }
+            item = self.object_cache.resource.get_hal(resource.href, hal_output)
+            item_links = {'self': {'href': resource.href}}
+            for link_name in item['_links']:
+                if link_name in context['links']:
+                    item_links[link_name] = [{'href': rel['href']}
+                                             for rel in item['_links'][link_name]
+                                             if rel['href'] in context['seen']]
+            item['_links'] = item_links
             if resource.depth == 0:
                 links['root'].append({'href': resource.href})
-            else:
-                if resource.link_type_path[-1] not in item_links[resource.href_path[-2]]:
-                    item_links[resource.href_path[-2]][resource.link_type_path[-1]] = []
-                item_links[resource.href_path[-2]][resource.link_type_path[-1]].append(self_href)
             embedded_items.append(item)
-        return HttpResponse(json.dumps(hal, indent=2), content_type='application/hal+json')
+        return hal
 
     if pydot:
         @renderer(format='gv', mimetypes=('text/vnd.graphviz',), name='GraphViz')
@@ -183,7 +135,7 @@ class GraphView(HALLDView):
             response['Content-Disposition'] = 'attachment; filename="graph.gv"'
             return response
 
-    def get_integer_param(self, request, name):
+    def get_integer_param(self, request, name, default=None):
         if name in request.GET:
             try:
                 value = int(request.GET[name])
@@ -192,3 +144,5 @@ class GraphView(HALLDView):
                 return value
             except ValueError:
                 raise exceptions.InvalidParameter(name, 'Parameter must be a non-negative integer')
+        else:
+            return default
