@@ -16,6 +16,7 @@ class LinkAdmin(admin.ModelAdmin):
 
 class SourceAdmin(admin.ModelAdmin):
     list_display = ['resource', 'type', 'author', 'committer', 'version', 'deleted']
+    list_filter = ['type', 'deleted']
 
 class ChangesetAdmin(admin.ModelAdmin):
     pass
