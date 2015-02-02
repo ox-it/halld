@@ -1,5 +1,5 @@
 django
-django-conneg
+djangorestframework
 #django-stalefields
 -e git+git://github.com/alexsdutton/django-stalefields.git#egg=django_stalefields
 -e git+git://github.com/RDFLib/rdflib-jsonld.git#egg=rdflib_jsonld

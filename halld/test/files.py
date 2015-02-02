@@ -6,17 +6,19 @@ import unittest
 from django.core.urlresolvers import reverse
 from django.contrib.auth.models import User
 import mock
+from rest_framework.test import force_authenticate
+import rest_framework.exceptions
 
 from .base import TestCase
 from ..models import Resource, Source
 from ..files.models import ResourceFile
 from ..files import views
+from django.test.client import RequestFactory
 
 class FileTestCase(TestCase):
     def setUp(self):
-        super(FileTestCase, self).setUp()
+        super().setUp()
         self.file_creation_view = views.FileCreationView.as_view()
-        self.file_resource_detail_view = views.FileResourceDetailView.as_view()
         self.file_detail_view = views.FileDetailView.as_view()
         self.test_file = io.BytesIO(b"hello")
         self.test_file.name = 'hello.txt'
@@ -29,8 +31,8 @@ class FileTestCase(TestCase):
         super(FileTestCase, self).tearDown()
 
     def create_file_resource(self):
-        request = self.factory.post("/document", {"file": self.test_file})
-        request.user = self.superuser
+        request = self.factory.post("/document", self.test_file.getvalue(), content_type='text/plain')
+        force_authenticate(request, self.superuser)
         response = self.file_creation_view(request, "document")
         path = response['Location'][17:]
         identifier = path.split('/')[-1]
@@ -38,8 +40,9 @@ class FileTestCase(TestCase):
 
 class FileCreationViewTestCase(FileTestCase):
     def testPostMultiPart(self):
-        request = self.factory.post("/document", {"file": self.test_file})
-        request.user = self.superuser
+        factory = RequestFactory()
+        request = factory.post("/document", {"file": self.test_file})
+        force_authenticate(request, self.superuser)
         response = self.file_creation_view(request, "document")
         self.check_creation_response(response)
 
@@ -77,10 +80,9 @@ class FileResourceDetailViewTestCase(FileTestCase):
 
         request = self.factory.get(path) # Trim scheme and host
         request.user = self.superuser
-        response = self.file_resource_detail_view(request, 'document', identifier)
+        response = self.resource_detail_view(request, 'document', identifier)
 
-        data = json.loads(response.content.decode())
-        file_link = data['_links'].get('describes')
+        file_link = response.data.data.get('describes')
         self.assertIsInstance(file_link, dict)
         self.assertEqual(request.build_absolute_uri(file_link.get('href')),
                          request.build_absolute_uri(reverse('halld-files:file-detail',
@@ -112,10 +114,11 @@ class FileViewTestCase(FileTestCase):
 
     def testPost(self):
         path, identifier = self.create_file_resource()
-        request = self.factory.post(path + '/file',
-                                    {'content_type': 'text/x-rst',
-                                     'file': self.another_file})
-        request.user = self.superuser
+        factory = RequestFactory()
+        request = factory.post(path + '/file',
+                               {'content_type': 'text/x-rst',
+                                'file': self.another_file})
+        force_authenticate(request, self.superuser)
         response = self.file_detail_view(request, 'document', identifier)
         self.assertEqual(response.status_code, http.client.NO_CONTENT)
         resource_file = ResourceFile.objects.get()
@@ -127,7 +130,7 @@ class FileViewTestCase(FileTestCase):
         request = self.factory.put(path + '/file',
                                    self.another_file.read(),
                                    content_type='text/x-rst')
-        request.user = self.superuser
+        force_authenticate(request, self.superuser)
         response = self.file_detail_view(request, 'document', identifier)
         self.assertEqual(response.status_code, http.client.NO_CONTENT)
         resource_file = ResourceFile.objects.get()
@@ -139,8 +142,8 @@ class FileViewTestCase(FileTestCase):
         path, identifier = self.create_file_resource()
         request = self.factory.delete(path + '/file')
         request.user = self.superuser
-        response = self.file_detail_view(request, 'document', identifier)
-        self.assertEqual(response.status_code, http.client.METHOD_NOT_ALLOWED)
+        with self.assertRaises(rest_framework.exceptions.MethodNotAllowed):
+            response = self.file_detail_view(request, 'document', identifier)
 
 class FileMetadataTestCase(TestCase):
     def upload_image(self):

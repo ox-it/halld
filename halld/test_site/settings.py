@@ -10,7 +10,7 @@ INSTALLED_APPS = [
     'halld.test_site.apps.TestHALLDConfig',
     'halld.files',
     'halld.test_site',
-    'django_conneg',
+    'rest_framework',
 ]
 
 BASE_URL = 'http://testserver/'
@@ -21,3 +21,8 @@ FILE_METADATA_USER = 'file-metadata'
 
 MIDDLEWARE_CLASSES = (
 )
+
+REST_FRAMEWORK = {
+    'EXCEPTION_HANDLER': 'halld.test_site.exceptions.reraise',
+    'TEST_REQUEST_DEFAULT_FORMAT': 'hal-json',
+}

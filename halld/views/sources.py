@@ -8,13 +8,14 @@ from django.db import transaction
 from django.utils.decorators import method_decorator
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, HttpResponseNotModified
-from django_conneg.http import HttpBadRequest, HttpGone
-from django_conneg.views import JSONView
+from rest_framework.response import Response
 
 from .mixins import VersioningMixin
 from .. import exceptions, get_halld_config
+from .. import response_data
 from ..models import Source, Resource, Changeset
 from .changeset import ChangesetView
+import jsonschema
 
 __all__ = ['SourceListView', 'SourceDetailView']
 
@@ -24,46 +25,86 @@ class BulkSourceUpdateView(ChangesetView):
         raise NotImplementedError
 
 class SourceListView(ChangesetView):
-    def dispatch(self, request, resource_type, identifier, **kwargs):
+    def initial(self, request, resource_type, identifier):
+        super().initial(request, resource_type, identifier)
         try:
-            resource_type = get_halld_config().resource_types[resource_type]
+            self.resource_type = self.halld_config.resource_types[resource_type]
         except KeyError:
             raise exceptions.NoSuchResourceType(resource_type)
-        resource_href = resource_type.base_url + identifier
-        if not Resource.objects.filter(href=resource_href).exists():
+        self.resource_href = self.resource_type.base_url + identifier
+        if not Resource.objects.filter(href=self.resource_href).exists():
             raise exceptions.SourceDataWithoutResource(resource_type, identifier)
-        return super(SourceListView, self).dispatch(request, resource_href)
 
-    def get(self, request, resource_href):
-        sources = Source.objects.filter(resource_id=resource_href)
+    def get(self, request, resource_type, identifier):
+        sources = Source.objects.filter(resource_id=self.resource_href)
         visible_sources = [source for source in sources
                                   if not source.deleted and
                                      request.user.has_perm('halld.view_source', source)]
-        embedded = {'source:{}'.format(source.type_id): source.get_hal(request.user) for source in visible_sources}
-        data = {'_embedded': embedded}
-        response = HttpResponse(json.dumps(data, indent=2, sort_keys=True),
-                                content_type='application/hal+json')
-        return response
+        paginator, page = self.get_paginator_and_page(visible_sources)
+        return Response(response_data.SourceList(sources=visible_sources,
+                                                 paginator=paginator,
+                                                 page=page))
 
-    def put(self, request, resource_href):
+    put_schema = {
+        'properties': {
+            '_embedded': {
+                'type': 'object',
+                'additionalProperties': False,
+                'properties': {
+                    'item': {
+                        'type': 'array',
+                        'items': {
+                            'type': 'object',
+                            'properties': {
+                                '_meta': {
+                                    'type': 'object',
+                                    'properties': {
+                                        'sourceType': {'type': 'string'},
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            }
+        },
+    }
+
+    def put(self, request, resource_type, identifier):
         data = self.get_request_json('application/hal+json')
-        embedded = data.get('_embedded')
-        if not isinstance(embedded, dict):
-            raise HttpBadRequest
-        
-        updates = []
-        for name in embedded:
-            if not name.startswith('source:'):
-                continue
-            source_type = name[7:]
+        try:
+            jsonschema.validate(data, self.put_schema)
+        except jsonschema.ValidationError as e:
+            raise exceptions.SchemaValidationError(e)
+        items = data.get('_embedded', {}).get('item')
+
+        updates, source_types = [], set()
+        for item in items:
+            source_type = item['_meta']['sourceType']
+
+            source_types.add(source_type)
+            item.pop('_links', None)
+            item.pop('_meta', None)
+
             updates.append({
                 'method': 'PUT',
                 'sourceType': source_type,
-                'resourceHref': resource_href,
-                'data': embedded[name],
+                'resourceHref': self.resource_href,
+                'data': item,
             })
 
-        changeset = self.get_new_changeset({'updates': updates})
+        source_types_to_delete = Source.objects.filter(resource_id=self.resource_href) \
+                                               .exclude(type_id__in=source_types).values('type_id')
+
+        for source_type in source_types_to_delete:
+            updates.append({
+                'method': 'DELETE',
+                'sourceType': source_type['type_id'],
+                'resourceHref': self.resource_href,
+            })
+
+        changeset = self.get_new_changeset({'updates': updates,
+                                            'description': 'PUT source list for {}'.format(self.resource_href)})
         changeset.perform()
         return HttpResponse(status=http.client.NO_CONTENT)
 
@@ -82,13 +123,8 @@ class SourceDetailView(VersioningMixin, ChangesetView):
         if self.check_version(source) is True:
             return HttpResponseNotModified()
         if source.deleted:
-            raise HttpGone
-        data = source.get_hal(request.user)
-        response = HttpResponse(json.dumps(data, indent=2, sort_keys=True),
-                                content_type='application/hal+json')
-        response['Last-Modified'] = wsgiref.handlers.format_date_time(mktime(source.modified.timetuple()))
-        response['ETag'] = source.get_etag()
-        return response
+            raise exceptions.SourceDeleted
+        return Response(response_data.Source(source=source))
 
     def put(self, request, resource_type, identifier, source_type, **kwargs):
         hal = self.get_request_json('application/hal+json')

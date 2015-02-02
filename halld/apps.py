@@ -49,3 +49,4 @@ class HALLDConfig(AppConfig, metaclass=abc.ABCMeta):
         assert len(set(t.name for t in type_definitions)) == len(type_definitions)
         return MappingProxyType({t.name: t for t in type_definitions})
 
+    jsonld_context = {}

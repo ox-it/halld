@@ -2,7 +2,6 @@ import hashlib
 import json
 
 from django.http import HttpResponse
-from django_conneg.decorators import renderer
 
 try:
     import pydot
@@ -120,7 +119,7 @@ class GraphView(HALLDView):
         })
         return self.render()
 
-    @renderer(format='hal', mimetypes=('application/hal+json',), name='HAL/JSON')
+    #@renderer(format='hal', mimetypes=('application/hal+json',), name='HAL/JSON')
     def render_hal(self, request, context, template_name):
         links = {
             'root': [],

@@ -2,6 +2,8 @@ from django.contrib.auth.models import User, AnonymousUser
 from django.core.cache import cache
 import django.test
 
+from rest_framework.test import APIRequestFactory, force_authenticate
+
 from ..models import Changeset, Link, Identifier, Source, Resource
 from .. import views
 from ..util.cache import ObjectCache
@@ -9,7 +11,7 @@ from ..util.cache import ObjectCache
 class TestCase(django.test.TestCase):
     def setUp(self):
         cache.clear()
-        self.factory = django.test.RequestFactory()
+        self.factory = APIRequestFactory()
         self.superuser = User.objects.create_superuser(username='superuser',
                                                        email='superuser@example.com',
                                                        password='secret')
@@ -31,7 +33,7 @@ class TestCase(django.test.TestCase):
 
     def create_resource(self):
         request = self.factory.post('/snake')
-        request.user = self.superuser
+        force_authenticate(request, self.superuser)
         response = self.resource_list_view(request, 'snake')
         resource_href = response['Location']
         identifier = resource_href.rsplit('/', 1)[1]
@@ -42,7 +44,7 @@ class TestCase(django.test.TestCase):
         response, identifier = self.create_resource()
         resource_href = response['Location']
         source_href = resource_href + '/source/science'
-        request = self.factory.put(source_href, '{}', 'application/hal+json')
+        request = self.factory.put(source_href, '{}', content_type='application/hal+json')
         request.user = self.superuser
         response = self.source_detail_view(request, 'snake', identifier, source_type)
         return response, identifier, source_href

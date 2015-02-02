@@ -5,6 +5,7 @@ import mock
 
 from .base import TestCase
 from ..models import Resource, Source, Identifier, Link
+from .. import response_data
 
 class ExtantTestCase(TestCase):
     def testExtantFalse(self):
@@ -77,11 +78,14 @@ class LinkTestCase(TestCase):
                               author=self.superuser, committer=self.superuser,
                               data={'@extant': self_extant,
                                     link_name: [{'href': 'http://testserver/snake/python'}]})
-        s_hal = s.get_hal(self.anonymous_user, self.object_cache)
-        self.assertEqual(s_hal['_links'].get(resultant_link_name),
+        s_rd = response_data.Resource(resource=s,
+                                      object_cache=self.object_cache,
+                                      user=self.anonymous_user)
+        s_data = s_rd.data
+        self.assertEqual(s_data[resultant_link_name],
                          [{'href': r.href}])
         if link_name != resultant_link_name:
-            self.assertEqual(s_hal['_links'].get(link_name), None)
+            self.assertEqual(s_data.get(link_name), None)
 
     def testSelfDefunctTimeless(self):
         self.perform_test(False, True, 'timelessF', 'timelessF')

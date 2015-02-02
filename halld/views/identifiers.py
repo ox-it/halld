@@ -1,15 +1,17 @@
 import json
 
-from django.http import HttpResponse
 import jsonschema
+from rest_framework.response import Response
 
+from .base import HALLDView
 from .mixins import JSONRequestMixin
 from .. import exceptions
 from ..models import Identifier, Source
+from .. import response_data
 
 __all__ = ['ByIdentifierView']
 
-class ByIdentifierView(JSONRequestMixin):
+class ByIdentifierView(HALLDView, JSONRequestMixin):
     schema = {
         'properties': {
             'scheme': {
@@ -64,11 +66,8 @@ class ByIdentifierView(JSONRequestMixin):
 
         for identifier in identifiers:
             resource = identifier.resource
-            result = {'type': resource.type_id, 'identifier': resource.identifier, 'resourceHref': resource.pk}
+            result = {'resource': resource}
             by_resource[resource.pk] = result
-            if query.get('includeData'):
-                data = resource.filter_data(request.user, resource.data)
-                result['data'] = resource.get_hal(request.user, data)
             if query.get('includeSources'):
                 result['sources'] = {n: None for n in query['includeSources']}
             results[identifier.value] = result
@@ -77,9 +76,14 @@ class ByIdentifierView(JSONRequestMixin):
         if query.get('includeSources'):
             for source in Source.objects.filter(resource__in=resources,
                                                 type_id__in=query['includeSources']):
-                by_resource[source.resource_id]['sources'][source.type_id] = source.get_hal(request.user)
+                if request.user.has_perm('halld.view_source', source):
+                    by_resource[source.resource_id]['sources'][source.type_id] = source
 
         if 'values' in query:
             for value in set(query['values']) - seen_values:
                 results[value] = None
-        return HttpResponse(json.dumps(results, indent=2), content_type='application/hal+json')
+
+        return Response(response_data.ByIdentifier(results=results,
+                                                   object_cache=request.object_cache,
+                                                   user=request.user,
+                                                   include_data=bool(query.get('includeData'))))

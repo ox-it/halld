@@ -1,6 +1,5 @@
 from django.core.urlresolvers import reverse
 from django.views.generic import View
-from django_conneg.http import HttpResponseSeeOther
 
 __all__ = ['IdView']
 

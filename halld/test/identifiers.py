@@ -43,11 +43,11 @@ class ByIdentifierViewTestCase(TestCase):
         data = {'scheme': 'snake',
                 'allInScheme': True,
                 'includeSources': ['science']}
-        request = self.factory.post('/by-identifier', json.dumps(data), 'application/json')
+        request = self.factory.post('/by-identifier', json.dumps(data),
+                                    content_type='application/json')
         request.user = self.anonymous_user
         response = self.by_identifier_view(request)
-        data = json.loads(response.content.decode())
-        self.assert_(id_one in data)
-        self.assert_(id_two in data)
-        self.assert_('science' in data[id_one]['sources'])
-        self.assert_('science' in data[id_two]['sources'])
+        self.assert_(id_one in response.data['results'])
+        self.assert_(id_two in response.data['results'])
+        self.assert_('science' in response.data['results'][id_one]['sources'])
+        self.assert_('science' in response.data['results'][id_two]['sources'])
