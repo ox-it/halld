@@ -303,6 +303,17 @@ class MissingParameter(HALLDException):
     description = "A required query parameter was missing."
     status_code = http.client.BAD_REQUEST
 
+    def __init__(self, parameter_name, parameter_detail=None):
+        self.parameter_name, self.parameter_detail = parameter_name, parameter_detail
+
+    @property
+    def detail(self):
+        data = super().detail
+        data['parameterName'] = self.parameter_name
+        if self.parameter_detail:
+            data['parameterDetail'] = self.parameter_detail
+        return data
+
 class CantReturnTree(HALLDException):
     name = 'cant-return-tree'
     description = "You requested a tree representation, but you specified more than one link, or that link is not inverse-functional"

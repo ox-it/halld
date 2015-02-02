@@ -4,6 +4,8 @@ import json
 
 from django.http import HttpResponse
 from django_conneg.decorators import renderer
+from rest_framework.response import Response
+from halld import response_data
 
 try:
     import pydot
@@ -12,7 +14,6 @@ except ImportError:
 
 from .base import HALLDView
 from .. import exceptions
-from ..hal import DefunctStrategy
 from ..models import Resource
 
 __all__ = ['GraphView']
@@ -31,12 +32,14 @@ class GraphView(HALLDView):
         offset = self.get_integer_param(request, 'offset')
         depth = self.get_integer_param(request, 'depth', 10)
 
+        if not roots:
+            raise exceptions.MissingParameter('root', 'You must supply one or more root resource URLs.')
         if not links:
             raise exceptions.MissingParameter('link', 'You must supply one or more link names.')
 
         for link in links:
             try:
-                link_type = get_link_type(link)
+                link_type = self.halld_config.link_types[link]
             except KeyError:
                 raise exceptions.NoSuchLinkType(link)
         if return_tree and (len(links) > 1 or not link_type.inverse_functional):
@@ -44,7 +47,7 @@ class GraphView(HALLDView):
 
         resources, seen, start = [], set(), set(roots)
         for i in range(depth):
-            new_resources = self.object_cache.resource.get_many(start - seen)
+            new_resources = request.object_cache.resource.get_many(start - seen)
             if types:
                 new_resources = (r for r in new_resources if r.type_id in types)
             if not new_resources:
@@ -59,25 +62,20 @@ class GraphView(HALLDView):
             start = set()
             for resource in new_resources:
                 resource.depth = i
-                resource_data = resource.filter_data(request.user)
+                resource_data = resource.get_filtered_data(request.user)
                 for link in links:
                     for rel in resource_data.get(link, ()):
                         start.add(rel['href'])
 
-        links.update(['defunct:' + l for l in links])
+        paginator, page = self.get_paginator_and_page(resources)
+        return Response(response_data.ResourceList(paginator=paginator,
+                                                   page=page,
+                                                   user=request.user,
+                                                   object_cache=request.object_cache,
+                                                   links=self.get_links(request)))
 
-        self.context.update({
-            'resources': resources,
-            'return_tree': return_tree,
-            'links': links,
-            'seen': seen,
-        })
-        return self.render()
-
-    def hal_json_from_context(self, request, context):
-        hal_output = self.object_cache.resource.hal_output.copy(defunct_strategy=DefunctStrategy.PROPERTY)
-        links = {
-            'root': [],
+    def get_links(self, request):
+        return {
             'addLinkType': {'href': request.get_full_path() + '&link={linkType}',
                             'templated': True},
             'addRootResource': {'href': request.get_full_path() + '&root={href}',
@@ -86,26 +84,7 @@ class GraphView(HALLDView):
                                     'templated': True},
             'addTypeFilter': {'href': request.get_full_path() + '&type={resourceType}',
                               'templated': True},
-            'self': request.get_full_path(),
         }
-        embedded_items = []
-        hal = {
-            '_links': links,
-            '_embedded': {'item': embedded_items},
-        }
-        for resource in context['resources']:
-            item = self.object_cache.resource.get_hal(resource.href, hal_output)
-            item_links = {'self': {'href': resource.href}}
-            for link_name in item['_links']:
-                if link_name in context['links']:
-                    item_links[link_name] = [{'href': rel['href']}
-                                             for rel in item['_links'][link_name]
-                                             if rel['href'] in context['seen']]
-            item['_links'] = item_links
-            if resource.depth == 0:
-                links['root'].append({'href': resource.href})
-            embedded_items.append(item)
-        return hal
 
     if pydot:
         @renderer(format='gv', mimetypes=('text/vnd.graphviz',), name='GraphViz')
