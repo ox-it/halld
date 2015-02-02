@@ -186,8 +186,7 @@ class Resource(models.Model, StaleFieldsMixin):
 
     def update_denormalized_fields(self):
         self.uri = self.data['@id']
-        self.deleted = bool(self.data.get('@deleted', False))
-        self.extant = bool(self.data.get('@extant', True))
+        self.extant = bool(self.data.get('_extant', True))
 
         # Resources without sources don't exist (yet)
         if not self.cached_source_set:

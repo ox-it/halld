@@ -75,7 +75,8 @@ class ByIdentifierView(HALLDView, JSONRequestMixin):
 
         if query.get('includeSources'):
             for source in Source.objects.filter(resource__in=resources,
-                                                type_id__in=query['includeSources']):
+                                                type_id__in=query['includeSources'],
+                                                deleted=False):
                 if request.user.has_perm('halld.view_source', source):
                     by_resource[source.resource_id]['sources'][source.type_id] = source
 
