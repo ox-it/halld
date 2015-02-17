@@ -4,6 +4,8 @@ import logging
 
 import jsonpointer
 
+from . import models
+
 logger = logging.getLogger(__name__)
 
 class Inference(metaclass=abc.ABCMeta):
@@ -24,9 +26,9 @@ class Tags(Inference):
 
 class FromPointers(Inference):
     def __init__(self, target, *pointers):
-        self.target = target
+        self.target = jsonpointer.JsonPointer(target)
         self.inferred_keys = {target}
-        self.pointers = pointers
+        self.pointers = list(map(jsonpointer.JsonPointer, pointers))
 
 class FirstOf(FromPointers):
     def __init__(self, target, *pointers, update=False):
@@ -59,6 +61,33 @@ class FirstOf(FromPointers):
                                             ', '.join(map(repr, self.pointers)),
                                             ', update=True' if self.update else '')
 
+class Lookup(FromPointers):
+    def __init__(self, target, scheme, *pointers):
+        self.target = jsonpointer.JsonPointer(target)
+        self.scheme = scheme
+        self.pointers = list(map(jsonpointer.JsonPointer, pointers))
+
+    def __call__(self, resource, data, **kwargs):
+        for pointer in self.pointers:
+            try:
+                value = data.resolve(pointer)
+                break
+            except jsonpointer.JsonPointerException:
+                continue
+        else:
+            return
+
+        try:
+            identifier = models.Identifier.objects.select_related('resource').get(scheme=self.scheme,
+                                                                                  value=value)
+        except models.Identifier.DoesNotExist:
+            logger.warning("Can't lookup identifier '%s' in scheme '%s' for resource '%s' and pointer '%s'",
+                           value, self.scheme,
+                           resource.href, pointer.path)
+        else:
+            other = identifier.resource
+            data.set(self.target, other.href)
+
 class Set(FromPointers):
     """
     Inference that unions the data from a set of source pointers.
@@ -76,14 +105,14 @@ class Set(FromPointers):
     def __call__(self, resource, data, **kwargs):
         result = set()
         for pointer in self.pointers:
-            value = jsonpointer.resolve_pointer(data, pointer, [])
+            value = data.resolve(pointer, [])
             if isinstance(value, collections.defaultdict):
                 continue
             if not isinstance(value, (list, set)):
                 value = {value}
             result.update(value)
         if result:
-            jsonpointer.set_pointer(data, self.target, sorted(result))
+            data.set(self.target, sorted(result))
 
 class ResourceMeta(Inference):
     inferred_keys = ('catalogRecord','inCatalog')

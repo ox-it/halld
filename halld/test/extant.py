@@ -72,11 +72,11 @@ class LinkTestCase(TestCase):
         r = Resource.objects.create(type_id='snake', identifier='python', creator=self.superuser)
         Source.objects.create(resource=r, type_id='science',
                               author=self.superuser, committer=self.superuser,
-                              data={'@extant': other_extant})
+                              data={'_extant': other_extant})
         s = Resource.objects.create(type_id='snake', identifier='cobra', creator=self.superuser)
         Source.objects.create(resource=s, type_id='science',
                               author=self.superuser, committer=self.superuser,
-                              data={'@extant': self_extant,
+                              data={'_extant': self_extant,
                                     link_name: [{'href': 'http://testserver/snake/python'}]})
         s_rd = response_data.Resource(resource=s,
                                       object_cache=self.object_cache,

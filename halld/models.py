@@ -5,6 +5,7 @@ import logging
 from urllib.parse import urljoin
 
 from django.conf import settings
+from django.core.cache import cache
 from django.core.urlresolvers import reverse
 from django.contrib.auth.models import User
 from django.db import IntegrityError, transaction
@@ -152,13 +153,14 @@ class Resource(models.Model, StaleFieldsMixin):
         if kwargs.pop('regenerate', True):
             self.regenerate(cascade_set, object_cache)
 
+        update_links = kwargs.pop('update_links', True)
+        update_identifiers = kwargs.pop('update_identifiers', True)
+
         if 'data' in self.stale_fields:
             self.created = self.created or now()
             self.modified = now()
             self.version += 1
 
-            update_links = kwargs.pop('update_links', True)
-            update_identifiers = kwargs.pop('update_identifiers', True)
             super(Resource, self).save(*args, **kwargs)
             if update_links:
                 self.update_links()
@@ -223,7 +225,7 @@ class Resource(models.Model, StaleFieldsMixin):
                 self.point = None
 
     def get_inferences(self):
-        return self.get_type().get_inferences()
+        return self.get_type().inferences
     def get_normalizations(self):
         return self.get_type().get_normalizations()
 
@@ -311,9 +313,18 @@ class Resource(models.Model, StaleFieldsMixin):
     def get_absolute_url(self):
         return self.get_type().base_url + self.identifier
 
-    def get_filtered_data(self, user, data=None):
-        data = data if data is not None else self.data
-        return self.get_type().get_filtered_data(self, user, data)
+    def get_filtered_data(self, user):
+        key = 'filtered:{}:{}'.format(user.username,
+                                      hashlib.sha256(self.href.encode('utf-8')).hexdigest())
+        data = cache.get(key)
+        if data:
+            version, data = json.loads(data)
+            if version != self.version:
+                data = None
+        if not data:
+            data = self.get_type().get_filtered_data(self, user, self.data)
+            cache.set(key, json.dumps((self.version, data)), None)
+        return data
 
     @classmethod
     def create(cls, creator, resource_type, identifier=None):

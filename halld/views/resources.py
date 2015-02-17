@@ -1,14 +1,13 @@
 import http.client
 
+from django.core.urlresolvers import reverse
 from django.db import transaction
 from django.http import HttpResponse
 from rest_framework.response import Response
-import rest_framework.renderers
 
 from .base import HALLDView
 from ..models import Resource
 from .. import exceptions
-from .. import renderers
 from halld import response_data
 
 __all__ = ['ResourceListView', 'ResourceDetailView']
@@ -37,7 +36,7 @@ class ResourceListView(HALLDView):
         paginator, page = self.get_paginator_and_page(resources)
         return Response(response_data.ResourceList(paginator=paginator,
                                                    page=page,
-                                                   resource_type=self.resource_type,
+                                                   links=self.get_links(resource_type),
                                                    exclude_extant=self.exclude_extant,
                                                    exclude_defunct=self.exclude_defunct,
                                                    user=request.user,
@@ -49,6 +48,16 @@ class ResourceListView(HALLDView):
         response = HttpResponse('', status=http.client.CREATED)
         response['Location'] = resource.href
         return response
+
+    def get_links(self, resource_type):
+        return {
+            'find': {'href': reverse('halld:resource-list', args=[resource_type]) + '/{identifier}',
+                     'templated': True},
+            'findSource': {'href': reverse('halld:resource-list', args=[resource_type]) + '/{identifier}/source/{sourceType}',
+                           'templated': True},
+            'findSourceList': {'href': reverse('halld:resource-list', args=[resource_type]) + '/{identifier}/source',
+                               'templated': True},
+        }
 
 class ResourceDetailView(HALLDView):
     def initial(self, request, resource_type, identifier):
@@ -71,7 +80,7 @@ class ResourceDetailView(HALLDView):
             raise exceptions.DeletedResource()
         return Response(response_data.Resource({
             'resource': resource,
-            'filtered_data': resource.get_filtered_data(request.user, resource.data),
+            'filtered_data': resource.get_filtered_data(request.user),
             'resource_type': resource_type,
             'user': request.user,
             'object_cache': request.object_cache,

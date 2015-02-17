@@ -22,29 +22,24 @@ class HALJSONRenderer(HALLDRenderer):
         return {'_links': index['links']}
 
     def render_resource_list(self, resource_list):
-        resource_type = resource_list['resource_type']
+        hal = {}
+        if 'resource_type' in resource_list:
+            hal.update(resource_list['resource_type'].get_type_properties())
 
         paginator, page = resource_list['paginator'], resource_list['page']
-
-        hal = copy.deepcopy(resource_type.get_type_properties())
         hal.update(self.paginated(paginator, page, self.resource_to_hal,
                                   resource_list.resource_data))
-        hal['_links'].update({
-            'find': {'href': reverse('halld:resource-list', args=[resource_type.name]) + '/{identifier}',
-                     'templated': True},
-            'findSource': {'href': reverse('halld:resource-list', args=[resource_type.name]) + '/{identifier}/source/{sourceType}',
-                           'templated': True},
-            'findSourceList': {'href': reverse('halld:resource-list', args=[resource_type.name]) + '/{identifier}/source',
-                               'templated': True},
-        })
-        if resource_list['exclude_extant']:
-            hal['_links']['includeExtant'] = {'href': self.url_param_replace(extant=None)}
-        else:
-            hal['_links']['excludeExtant'] = {'href': self.url_param_replace(extant='off')}
-        if resource_list['exclude_defunct']:
-            hal['_links']['includeDefunct'] = {'href': self.url_param_replace(defunct='on')}
-        else:
-            hal['_links']['excludeDefunct'] = {'href': self.url_param_replace(defunct=None)}
+
+        if 'exclude_extant' in resource_list:
+            if resource_list['exclude_extant']:
+                hal['_links']['includeExtant'] = {'href': self.url_param_replace(extant=None)}
+            else:
+                hal['_links']['excludeExtant'] = {'href': self.url_param_replace(extant='off')}
+        if 'exclude_defunct' in resource_list:
+            if resource_list['exclude_defunct']:
+                hal['_links']['includeDefunct'] = {'href': self.url_param_replace(defunct='on')}
+            else:
+                hal['_links']['excludeDefunct'] = {'href': self.url_param_replace(defunct=None)}
         return hal
 
     def render_resource(self, resource):
@@ -150,4 +145,5 @@ class HALJSONRenderer(HALLDRenderer):
             'firstPage': 1,
             'lastPage': paginator.num_pages,
             'itemCount': paginator.count,
+            'page': page.number,
         }
