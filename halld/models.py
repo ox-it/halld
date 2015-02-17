@@ -153,13 +153,14 @@ class Resource(models.Model, StaleFieldsMixin):
         if kwargs.pop('regenerate', True):
             self.regenerate(cascade_set, object_cache)
 
+        update_links = kwargs.pop('update_links', True)
+        update_identifiers = kwargs.pop('update_identifiers', True)
+
         if 'data' in self.stale_fields:
             self.created = self.created or now()
             self.modified = now()
             self.version += 1
 
-            update_links = kwargs.pop('update_links', True)
-            update_identifiers = kwargs.pop('update_identifiers', True)
             super(Resource, self).save(*args, **kwargs)
             if update_links:
                 self.update_links()
