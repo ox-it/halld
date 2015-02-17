@@ -35,7 +35,7 @@ class InferenceTestCase(TestCase):
         set_inference = inference.Set('/target', '/source/one', '/source/two')
         
         # these should come back sorted
-        data = {'source': {'one': ['Dog', 'Cat'], 'two': 'Mouse'}}
+        data = Data({'source': {'one': ['Dog', 'Cat'], 'two': 'Mouse'}})
         set_inference(resource, data)
         self.assertEqual(data.get('target'),
                          ['Cat', 'Dog', 'Mouse'])
@@ -44,8 +44,8 @@ class InferenceTestCase(TestCase):
         resource = mock.Mock()
         set_inference = inference.Set('/target', '/source/one', '/source/two', append=True)
 
-        data = {'target': 'Horse',
-                'source': {'one': ['Dog', 'Cat'], 'two': 'Mouse'}}
+        data = Data({'target': 'Horse',
+                     'source': {'one': ['Dog', 'Cat'], 'two': 'Mouse'}})
         set_inference(resource, data)
         self.assertEqual(data.get('target'),
                          ['Cat', 'Dog', 'Horse', 'Mouse'])
