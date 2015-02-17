@@ -80,7 +80,7 @@ class ResourceDetailView(HALLDView):
             raise exceptions.DeletedResource()
         return Response(response_data.Resource({
             'resource': resource,
-            'filtered_data': resource.get_filtered_data(request.user, resource.data),
+            'filtered_data': resource.get_filtered_data(request.user),
             'resource_type': resource_type,
             'user': request.user,
             'object_cache': request.object_cache,
