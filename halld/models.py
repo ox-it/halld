@@ -5,6 +5,7 @@ import logging
 from urllib.parse import urljoin
 
 from django.conf import settings
+from django.core.cache import cache
 from django.core.urlresolvers import reverse
 from django.contrib.auth.models import User
 from django.db import IntegrityError, transaction
@@ -311,9 +312,18 @@ class Resource(models.Model, StaleFieldsMixin):
     def get_absolute_url(self):
         return self.get_type().base_url + self.identifier
 
-    def get_filtered_data(self, user, data=None):
-        data = data if data is not None else self.data
-        return self.get_type().get_filtered_data(self, user, data)
+    def get_filtered_data(self, user):
+        key = 'filtered:{}:{}'.format(user.username,
+                                      hashlib.sha256(self.href.encode('utf-8')).hexdigest())
+        data = cache.get(key)
+        if data:
+            version, data = json.loads(data)
+            if version != self.version:
+                data = None
+        if not data:
+            data = self.get_type().get_filtered_data(self, user, self.data)
+            cache.set(key, json.dumps((self.version, data)), None)
+        return data
 
     @classmethod
     def create(cls, creator, resource_type, identifier=None):
