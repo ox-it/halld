@@ -223,7 +223,7 @@ class Resource(models.Model, StaleFieldsMixin):
                 self.point = None
 
     def get_inferences(self):
-        return self.get_type().get_inferences()
+        return self.get_type().inferences
     def get_normalizations(self):
         return self.get_type().get_normalizations()
 

@@ -4,6 +4,8 @@ import logging
 
 import jsonpointer
 
+from . import models
+
 logger = logging.getLogger(__name__)
 
 class Inference(metaclass=abc.ABCMeta):
@@ -24,9 +26,9 @@ class Tags(Inference):
 
 class FromPointers(Inference):
     def __init__(self, target, *pointers):
-        self.target = target
+        self.target = jsonpointer.JsonPointer(target)
         self.inferred_keys = {target}
-        self.pointers = pointers
+        self.pointers = list(map(jsonpointer.JsonPointer, pointers))
 
 class FirstOf(FromPointers):
     def __init__(self, target, *pointers, update=False):
@@ -76,14 +78,14 @@ class Set(FromPointers):
     def __call__(self, resource, data, **kwargs):
         result = set()
         for pointer in self.pointers:
-            value = jsonpointer.resolve_pointer(data, pointer, [])
+            value = data.resolve(pointer, [])
             if isinstance(value, collections.defaultdict):
                 continue
             if not isinstance(value, (list, set)):
                 value = {value}
             result.update(value)
         if result:
-            jsonpointer.set_pointer(data, self.target, sorted(result))
+            data.set(self.target, sorted(result))
 
 class ResourceMeta(Inference):
     inferred_keys = ('catalogRecord','inCatalog')

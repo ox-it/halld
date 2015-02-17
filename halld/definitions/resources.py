@@ -11,6 +11,7 @@ from django.core.exceptions import PermissionDenied
 
 from .. import get_halld_config
 from .. import exceptions
+from django.utils.functional import cached_property
 
 uuid_re = re.compile('^[0-9a-f]{32}$')
 
@@ -44,6 +45,10 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
     def href(self):
         from django.conf import settings
         return '{}{}'.format(settings.BASE_URL, self.name)
+
+    @cached_property
+    def inferences(self):
+        return self.get_inferences()
 
     def get_inferences(self):
         inferences = []
