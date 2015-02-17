@@ -21,7 +21,8 @@ class IndexView(HALLDView):
             'findSource': {'href': '/{resourceType}/{identifier}/source/{source}',
                            'templated': True},
             'findByIdentifier': {'href': reverse('halld:by-identifier')},
-            'graph': {'href': reverse('halld:graph')},
+            'graph': {'href': reverse('halld:graph') + '/root={root}&linkType={linkType}',
+                      'templated': True},
             'changeset': {'href': reverse('halld:changeset-list')},
         }
         links.update({
