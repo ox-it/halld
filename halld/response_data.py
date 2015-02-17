@@ -51,6 +51,12 @@ class Resource(ResponseData):
 
         link_names = set()
         if self.get('include_links', True):
+            hrefs = set()
+            for link_type in self.halld_config.link_types.values():
+                link_items = data.get(link_type.name, [])
+                hrefs.update(l['href'] for l in link_items if l)
+            self['object_cache'].resource.get_many(hrefs)
+
             for link_type in self.halld_config.link_types.values():
                 link_items = data.pop(link_type.name, [])
                 if not link_type.include:
