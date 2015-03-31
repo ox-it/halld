@@ -70,12 +70,13 @@ class FileView(HALLDView):
         if not source_types:
             return
         updates = []
-        resource_file.file.open()
+        with open(resource_file.file.path, 'r') as f:
+            document = resource_file.resource.get_type().parse_file(f)
         try:
             for source_type in source_types:
                 resource_file.file.seek(0)
                 try:
-                    data = source_type.get_metadata(resource_file.file)
+                    data = source_type.get_metadata(document)
                 except NotImplementedError:
                     data = None
                 update = {
@@ -88,7 +89,7 @@ class FileView(HALLDView):
         finally:
             resource_file.file.close()
 
-        committer = get_user_model().objects.get(username=conf.FILE_METADATA_USER)
+        committer = get_user_model().objects.get(username=get_halld_files_config().file_metadata_user)
         source_updater = SourceUpdater(request.build_absolute_uri(),
                                        author=request.user,
                                        committer=committer)
@@ -127,7 +128,7 @@ class FileDetailView(FileView):
         self.resource_file = ResourceFile.objects.get(resource=self.resource)
 
     def get(self, request, resource_type, identifier):
-        if conf.USE_XSENDFILE:
+        if get_halld_files_config().use_xsendfile:
             response = HttpResponse(content_type=self.resource_file.content_type)
             response['X-Send-File'] = self.resource_file.file.path
         else:
