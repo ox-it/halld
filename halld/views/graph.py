@@ -2,10 +2,8 @@ import collections
 import hashlib
 import json
 
-from django.http import HttpResponse
-from django_conneg.decorators import renderer
 from rest_framework.response import Response
-from halld import response_data
+from halld import response_data, renderers
 
 try:
     import pydot
@@ -14,11 +12,16 @@ except ImportError:
 
 from .base import HALLDView
 from .. import exceptions
-from ..models import Resource
 
 __all__ = ['GraphView']
 
 class GraphView(HALLDView):
+    @property
+    def renderer_classes(self):
+        return [
+            renderers.GraphVizRenderer,
+        ] + super().renderer_classes
+
     def get(self, request):
         roots = tuple(map(request.build_absolute_uri, request.GET.getlist('root')))
         links = set(request.GET.getlist('link'))
@@ -85,34 +88,6 @@ class GraphView(HALLDView):
             'addTypeFilter': {'href': request.get_full_path() + '&type={resourceType}',
                               'templated': True},
         }
-
-    if pydot:
-        @renderer(format='gv', mimetypes=('text/vnd.graphviz',), name='GraphViz')
-        def render_dot(self, request, context, template_name):
-            def sha1(n):
-                return hashlib.sha1(n.encode('utf-8')).hexdigest()
-
-            graph, seen = pydot.Graph(), set()
-            for resource in context['resources']:
-                if resource.href not in seen:
-                    node = pydot.Node(sha1(resource.href))
-                    node.set_label(resource.data.get('title', ''))
-                    if not resource.extant:
-                        node.set_color('gray')
-                        node.set_fontcolor('gray')
-                    graph.add_node(node)
-                    seen.add(resource.href)
-                if resource.link_type_path:
-                    edge_data = resource.href_path[-2], resource.link_type_path[-1], resource.href
-                    if edge_data not in seen:
-                        edge = pydot.Edge(sha1(resource.href_path[-2]), sha1(resource.href))
-                        if not resource.link_extant:
-                            edge.set_color('gray')
-                        graph.add_edge(edge)
-                        seen.add(edge_data)
-            response = HttpResponse(graph.to_string(), content_type='text/vnd.graphviz')
-            response['Content-Disposition'] = 'attachment; filename="graph.gv"'
-            return response
 
     def get_integer_param(self, request, name, default=None):
         if name in request.GET:
