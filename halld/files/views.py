@@ -16,22 +16,16 @@ from ..models import Resource
 import halld.exceptions
 from ..changeset import SourceUpdater
 from .definitions import FileResourceTypeDefinition, FileMetadataSourceTypeDefinition
-from . import conf
 from . import exceptions
 from .forms import UploadFileForm
 from .models import ResourceFile
 from ..views.resources import ResourceListView
 from ..views.base import HALLDView
+from . import get_halld_files_config
 
 class FileView(HALLDView):
     parser_classes = (FileUploadParser,)
 
-    # Needed, otherwise filename will be None, and rest_framework will assume
-    # no file has been uploaded.
-    def get_parser_context(self, http_request):
-        parser_context = copy.deepcopy(super().get_parser_context(http_request))
-        parser_context['kwargs']['filename'] = 'uploaded-file'
-        return parser_context
 
     def process_file(self, request, resource_file):
         try:
@@ -47,6 +41,7 @@ class FileView(HALLDView):
         elif content_type == 'application/x-www-form-urlencoded':
             raise exceptions.NoFileUploaded
         else:
+            request.META['HTTP_CONTENT_DISPOSITION'] = 'attachment; filename="file"'
             self.process_file_from_request_body(request, resource_file, content_type)
         self.update_file_metadata(request, resource_file)
 
