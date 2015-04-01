@@ -51,12 +51,7 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
         return self.get_inferences()
 
     def get_inferences(self):
-        inferences = []
-        if self.source_types is not None:
-            for source_type in self.source_types:
-                source_type = get_halld_config().source_types[source_type]
-                inferences.extend(source_type.get_inferences())
-        return inferences
+        return []
 
     def get_normalizations(self):
         return [
