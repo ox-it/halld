@@ -44,6 +44,7 @@ class Resource(ResponseData):
         from . import exceptions
         from halld.files.models import ResourceFile
         from halld.files.definitions.resources import FileResourceTypeDefinition
+        resource_type = self['resource'].get_type()
         data = self['resource'].get_filtered_data(self['user'])
 
         data['_extant'] = self['resource'].extant
@@ -114,6 +115,11 @@ class Resource(ResponseData):
         data['_meta'] = {'created': self['resource'].created.isoformat(),
                         'modified': self['resource'].modified.isoformat(),
                         'version': self['resource'].version}
+
+        resource_type.add_derived_data(resource=self['resource'],
+                                       data=data,
+                                       object_cache=self['object_cache'],
+                                       user=self['user'])
         return data
 
 class SourceList(ResponseData):

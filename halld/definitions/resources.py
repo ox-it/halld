@@ -140,6 +140,14 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
             else:
                 links.sort(key=lambda link: link['href'])
 
+    def add_derived_data(self, resource, data, object_cache, **kwargs):
+        """
+        Provides an opportunity to modify the data just before it's sent to
+        the user. Can be used to include real-time information, or include
+        data from related resources once they've been filtered.
+        """
+        pass
+
 class DefaultFilteredResourceTypeDefinition(ResourceTypeDefinition):
     """
     Subclass this to not expose any data by default.
