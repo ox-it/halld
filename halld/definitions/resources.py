@@ -124,9 +124,10 @@ class ResourceTypeDefinition(object, metaclass=abc.ABCMeta):
     def normalize_dates(self, resource, data, **kwargs):
         pass # TODO
 
-    def add_inbound_links(self, resource, data, **kwargs):
+    def add_inbound_links(self, resource, data, prefetched_data, **kwargs):
         from ..models import Link
-        for link in Link.objects.filter(target_href=resource.href):
+        inbound_links = prefetched_data.get('inbound_links', Link.objects.filter(target_href=resource.href))
+        for link in inbound_links:
             link_type = get_halld_config().link_types[link.type_id].inverse()
             link_dict = {'href': link.source_id,
                          'inbound': True}

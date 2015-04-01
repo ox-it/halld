@@ -22,6 +22,7 @@ from .definitions import ResourceTypeDefinition
 from . import signals, exceptions
 from .conf import is_spatial_backend
 from .data import Data
+import itertools
 
 if is_spatial_backend:
     from django.contrib.gis.db import models
@@ -93,7 +94,7 @@ class Resource(models.Model, StaleFieldsMixin):
     def cached_source_set(self):
         self._cached_source_set = None
 
-    def collect_data(self, object_cache):
+    def collect_data(self, object_cache, prefetched_data):
         data = Data()
         data['href'] = self.get_absolute_url()
         data['@source'], data['identifier'], data['stableIdentifier'] = {}, {}, {}
@@ -103,11 +104,13 @@ class Resource(models.Model, StaleFieldsMixin):
         for inference in self.get_inferences():
             inference(resource=self,
                       data=data,
-                      object_cache=object_cache)
+                      object_cache=object_cache,
+                      prefetched_data=prefetched_data)
         for normalization in self.get_normalizations():
             normalization(resource=self,
                           data=data,
-                          object_cache=object_cache)
+                          object_cache=object_cache,
+                          prefetched_data=prefetched_data)
         data['identifier'].update(data['stableIdentifier'])
 
         if not self.get_type().allow_uri_override:
@@ -117,8 +120,8 @@ class Resource(models.Model, StaleFieldsMixin):
         del data['@source']
         return data
 
-    def regenerate(self, cascade_set, object_cache):
-        data = self.collect_data(object_cache)
+    def regenerate(self, cascade_set, object_cache, prefetched_data):
+        data = self.collect_data(object_cache, prefetched_data)
         if data == self.data:
             return False
         old_data, self.data = self.data, data
@@ -151,7 +154,7 @@ class Resource(models.Model, StaleFieldsMixin):
         cascade = 'cascade_set' not in kwargs
         cascade_set = kwargs.pop('cascade_set', set())
         if kwargs.pop('regenerate', True):
-            self.regenerate(cascade_set, object_cache)
+            self.regenerate(cascade_set, object_cache, prefetched_data={})
 
         update_links = kwargs.pop('update_links', True)
         update_identifiers = kwargs.pop('update_identifiers', True)
@@ -225,7 +228,11 @@ class Resource(models.Model, StaleFieldsMixin):
                 self.point = None
 
     def get_inferences(self):
-        return self.get_type().inferences
+        return itertools.chain(
+            self.get_type().inferences,
+            *(s.get_type().inferences for s in self.cached_source_set)
+        )
+
     def get_normalizations(self):
         return self.get_type().get_normalizations()
 
@@ -274,21 +281,24 @@ class Resource(models.Model, StaleFieldsMixin):
                 data['stableIdentifier'].pop(resource_type.name, None)
         data['stableIdentifier']['uri'] = self.get_absolute_uri(data)
 
+    @property
+    def identifier_data(self):
+        if self.extant:
+            return self.data.get('identifier', {}).items()
+        else:
+            return self.data.get('stableIdentifier', {}).items()
+
     def update_identifiers(self):
         Identifier.objects.filter(resource=self).delete()
-        if self.extant:
-            identifiers = self.data.get('identifier', {}).items()
-        else:
-            identifiers = self.data.get('stableIdentifier', {}).items()
         try:
             with transaction.atomic():
                 Identifier.objects.bulk_create([
                     Identifier(resource=self, scheme=scheme, value=value)
-                    for scheme, value in identifiers
+                    for scheme, value in self.identifier_data
                 ])
         except IntegrityError:
             # One of them was duplicated, so find out which one
-            for scheme, value in identifiers:
+            for scheme, value in self.identifier_data:
                 try:
                     Identifier.objects.create(resource=self,
                                               scheme=scheme,
