@@ -10,7 +10,7 @@ from ..models import Resource
 from .. import exceptions
 from halld import response_data
 
-__all__ = ['ResourceListView', 'ResourceDetailView']
+__all__ = ['ResourceListView', 'ResourceMultiView', 'ResourceDetailView']
 
 class ResourceListView(HALLDView):
     def initial(self, request, resource_type):
@@ -25,7 +25,7 @@ class ResourceListView(HALLDView):
 
     def get_template_names(self):
         return ['halld/resource-type/' + self.kwargs['resource_type'] + '.html',
-                'halld/resource-type.html']
+                'halld/resource-list.html']
 
     def get(self, request, resource_type):
         resources = Resource.objects.filter(type_id=self.resource_type.name)
@@ -57,6 +57,26 @@ class ResourceListView(HALLDView):
                            'templated': True},
             'findSourceList': {'href': reverse('halld:resource-list', args=[resource_type]) + '/{identifier}/source',
                                'templated': True},
+        }
+
+class ResourceMultiView(HALLDView):
+    def get_template_names(self):
+        return ['halld/resource-list.html']
+
+    def get(self, request):
+        hrefs = map(request.build_absolute_uri, request.GET.getlist('href'))
+        resources = Resource.objects.filter(href__in=hrefs)
+        paginator, page = self.get_paginator_and_page(resources)
+        return Response(response_data.ResourceList(paginator=paginator,
+                                                   page=page,
+                                                   user=request.user,
+                                                   links=self.get_links(),
+                                                   object_cache=request.object_cache))
+
+    def get_links(self):
+        return {
+            'addResource': {'href': self.request.build_absolute_uri() + '&href={href}',
+                            'templated': True}
         }
 
 class ResourceDetailView(HALLDView):
