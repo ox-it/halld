@@ -66,7 +66,7 @@ class FileView(HALLDView):
             return
         updates = []
         with open(resource_file.file.path, 'r') as f:
-            document = resource_file.resource.get_type().parse_file(f)
+            document = resource_file.resource.get_type().parse_file(f, resource_file.content_type)
         try:
             for source_type in source_types:
                 resource_file.file.seek(0)

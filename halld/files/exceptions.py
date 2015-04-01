@@ -14,3 +14,8 @@ class NoFileUploaded(HALLDException):
     slug = 'no-file-uploaded'
     status_code = http.client.BAD_REQUEST
     description = "A file upload was expected, but wasn't received."
+
+class UnparsableFile(HALLDException):
+    slug = 'unparsable-file'
+    status_code = http.client.BAD_REQUEST
+    description = "Couldn't parse uploaded file"

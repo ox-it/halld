@@ -9,5 +9,5 @@ class FileResourceTypeDefinition(ResourceTypeDefinition):
     maximum_file_size = 10 * 1024 * 1024 # 10MiB
 
     @abc.abstractmethod
-    def parse_file(self, f):
-        pass
+    def parse_file(self, f, content_type):
+        return None

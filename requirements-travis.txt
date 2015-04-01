@@ -8,6 +8,7 @@ jsonfield
 jsonpatch
 jsonpointer
 jsonschema
+lxml
 Markdown
 mock
 Pillow
