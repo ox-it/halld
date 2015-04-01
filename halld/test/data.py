@@ -26,7 +26,7 @@ class DataTestCase(TestCase):
     def testIdentifierJSON(self):
         data = Data()
         data['stableIdentifier']['foo'] = 'bar'
-        actual = json.dumps(data, sort_keys=True)
+        actual = json.dumps(data._data, sort_keys=True)
         expected = json.dumps({'identifier': {'foo': 'bar'},
                                'stableIdentifier': {'foo': 'bar'}},
                               sort_keys=True)

@@ -118,7 +118,7 @@ class Resource(models.Model, StaleFieldsMixin):
         if not data.get('@id'):
             data['@id'] = self.get_absolute_uri(data)
         del data['@source']
-        return data
+        return data._data
 
     def regenerate(self, cascade_set, object_cache, prefetched_data):
         data = self.collect_data(object_cache, prefetched_data)
