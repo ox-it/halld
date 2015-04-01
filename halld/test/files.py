@@ -100,7 +100,7 @@ class FileViewTestCase(FileTestCase):
         self.assertEqual(response['Content-Type'], 'text/plain')
         self.assertEqual(b''.join(response.streaming_content), self.test_file.getvalue())
 
-    @mock.patch('halld.files.conf.USE_XSENDFILE', True)
+    @mock.patch('halld.files.apps.HALLDFilesConfig.use_xsendfile', True)
     def testGetXSendFile(self):
         # X-Send-File is a header to tell the web server to send a file served
         # off disk.
