@@ -2,7 +2,7 @@ from lxml import etree
 import PIL.Image
 
 from halld.files.definitions import FileResourceTypeDefinition
-from halld.files.exceptions import UnparsableFile
+from halld.files.definitions.parsers import PILFileParserMixin
 from halld.inference import FirstOf
 from halld.definitions import ResourceTypeDefinition
 
@@ -26,21 +26,11 @@ class PenguinResourceTypeDefinition(ResourceTypeDefinition):
 
 image_content_types = {'image/jpeg', 'image/png'}
 
-class DocumentResourceTypeDefinition(FileResourceTypeDefinition):
+class DocumentResourceTypeDefinition(PILFileParserMixin,
+                                     FileResourceTypeDefinition):
     name = 'document'
 
     source_types = ['file-metadata:image']
-
-    def parse_file(self, f, content_type):
-        if content_type in image_content_types:
-            try:
-                return PIL.Image.open(f)
-            except OSError as e: # cannot identify image file
-                raise UnparsableFile from e
-        elif content_type == 'image/svg+xml':
-            return etree.parse(f)
-        else:
-            return super().parse_file(f, content_type)
 
 class URITemplatedResourceTypeDefinition(ResourceTypeDefinition):
     name = 'uri-templated'

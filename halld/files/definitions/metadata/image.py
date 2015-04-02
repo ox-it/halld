@@ -24,9 +24,10 @@ class ImageMetadataSourceTypeDefinition(FileMetadataSourceTypeDefinition):
             metadata['width'], metadata['height'] = document.size
             if hasattr(document, '_getexif'):
                 exif = document._getexif()
-                metadata['exif'] = {PIL.ExifTags.TAGS[k]: v
-                                    for k, v in exif.items()
-                                    if k in PIL.ExifTags.TAGS}
+                if exif:
+                    metadata['exif'] = {PIL.ExifTags.TAGS[k]: (v.decode('utf-8') if isinstance(v, bytes) else v)
+                                        for k, v in exif.items()
+                                        if k in PIL.ExifTags.TAGS}
         elif etree is not None and isinstance(document, etree._Element):
             if document.xpath('self::svg:svg[@width and @height]', namespaces=namespaces):
                 w, h = document.attrib['width'], document.attrib['height']
@@ -39,4 +40,6 @@ class ImageMetadataSourceTypeDefinition(FileMetadataSourceTypeDefinition):
                 title = document.xpath('svg:title/text()', namespaces=namespaces)
                 if title:
                     metadata['title'] = title[0]
+        elif etree is not None and isinstance(document, etree._ElementTree):
+            return self.get_metadata(document.getroot())
         return metadata or None
