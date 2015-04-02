@@ -4,6 +4,7 @@ import importlib
 import threading
 import ujson
 
+from django.utils.functional import cached_property
 import jsonschema
 
 from halld import exceptions
@@ -24,6 +25,10 @@ class SourceTypeDefinition(object, metaclass=abc.ABCMeta):
                            {'name': name,
                             'contributed_types': contributed_types})
         return source_type
+
+    @cached_property
+    def inferences(self):
+        return self.get_inferences()
 
     def get_inferences(self):
         return []

@@ -1,4 +1,8 @@
+from lxml import etree
+import PIL.Image
+
 from halld.files.definitions import FileResourceTypeDefinition
+from halld.files.definitions.parsers import PILFileParserMixin
 from halld.inference import FirstOf
 from halld.definitions import ResourceTypeDefinition
 
@@ -20,7 +24,10 @@ class PenguinResourceTypeDefinition(ResourceTypeDefinition):
     def user_can_assign_identifier(self, user, identifier):
         return user.is_superuser
 
-class DocumentResourceTypeDefinition(FileResourceTypeDefinition):
+image_content_types = {'image/jpeg', 'image/png'}
+
+class DocumentResourceTypeDefinition(PILFileParserMixin,
+                                     FileResourceTypeDefinition):
     name = 'document'
 
     source_types = ['file-metadata:image']

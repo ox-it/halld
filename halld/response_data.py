@@ -44,6 +44,7 @@ class Resource(ResponseData):
         from . import exceptions
         from halld.files.models import ResourceFile
         from halld.files.definitions.resources import FileResourceTypeDefinition
+        resource_type = self['resource'].get_type()
         data = self['resource'].get_filtered_data(self['user'])
 
         data['_extant'] = self['resource'].extant
@@ -74,8 +75,12 @@ class Resource(ResponseData):
                         continue
                     if link_type.embed:
                         link_item.update(other_data)
-                    elif 'title' in other_data:
-                        link_item['title'] = other_data['title']
+                    else:
+                        if 'title' in other_data:
+                            link_item['title'] = other_data['title']
+                        describes = other_data.get('describes')
+                        if describes:
+                            link_item['_links'] = {'describes': describes}
 
                     if link_type.timeless or (data['_extant'] and other_data['_extant']):
                         link_name = link_type.name
@@ -98,7 +103,7 @@ class Resource(ResponseData):
             for link_type in self.halld_config.link_types.values():
                 data.pop(link_type.name, None)
 
-        if isinstance(self['resource'].get_type(), FileResourceTypeDefinition):
+        if isinstance(resource_type, FileResourceTypeDefinition):
             data['describes'] = {
                 'href': reverse('halld-files:file-detail',
                                 args=[self['resource'].type_id,
@@ -114,6 +119,11 @@ class Resource(ResponseData):
         data['_meta'] = {'created': self['resource'].created.isoformat(),
                         'modified': self['resource'].modified.isoformat(),
                         'version': self['resource'].version}
+
+        resource_type.add_derived_data(resource=self['resource'],
+                                       data=data,
+                                       object_cache=self['object_cache'],
+                                       user=self['user'])
         return data
 
 class SourceList(ResponseData):

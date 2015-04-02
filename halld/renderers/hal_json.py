@@ -83,7 +83,7 @@ class HALJSONRenderer(HALLDRenderer):
                     else:
                         sources[source_type] = None
             if by_identifier.get('include_data'):
-                hal[identifier]['data'] = self.resource_to_hal(resource.data),
+                hal[identifier]['data'] = self.resource_to_hal(resource.data)
         return hal
 
     def render_error(self, error):
@@ -97,6 +97,10 @@ class HALJSONRenderer(HALLDRenderer):
                 link_items = data.pop(link_name, None)
                 if not link_items:
                     continue
+                if isinstance(link_items, dict):
+                    link_items = self.resource_to_hal(link_items)
+                elif isinstance(link_items, list):
+                    link_items = list(map(self.resource_to_hal, link_items))
                 if link_type.embed:
                     embedded[link_name] = link_items
                 else:

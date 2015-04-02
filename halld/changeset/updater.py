@@ -6,7 +6,7 @@ import logging
 import re
 from urllib.parse import urljoin
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 import jsonschema
 
 from .schema import schema
@@ -17,6 +17,22 @@ from .. import models
 from .. import get_halld_config
 
 logger = logging.getLogger(__name__)
+
+class IdentifierCache(collections.defaultdict):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.reverse = collections.defaultdict(set)
+
+    def __missing__(self, key):
+        resource = models.Identifier.objects.select_related('resource').get(scheme=key[0], value=key[1]).resource.href
+        self[key] = resource
+        return resource
+    def __setitem__(self, key, value):
+        self.reverse[value].add(key)
+        super().__setitem__(key, value)
+    def __delitem__(self, key):
+        self.reverse[self[key]].remove(key)
+        super().__delitem__(key)
 
 class SourceUpdater(object):
     schema = schema
@@ -155,19 +171,35 @@ class SourceUpdater(object):
         for href, sources in sources_by_resource.items():
             resources[href].cached_source_set = sources
 
+        identifier_cache = IdentifierCache()
         resources_to_save = set(resources.values())
         for i in range(1, self.max_cascades + 1):
             logger.debug("Cascade %d: %d resources to save",
                              i, len(resources_to_save))
             cascade_set = set()
+            changed = 0
+
+            inbound_links = collections.defaultdict(list)
+            for link in models.Link.objects.filter(target_href__in=[r.href for r in resources_to_save]):
+                inbound_links[link.target_href].append(link)
+
             for j, resource in enumerate(resources_to_save, 1):
                 if j % 100 == 0:
-                    logger.debug("Regenerating resource %d of %d for user %s (%d cascades)",
+                    logger.debug("Regenerating resource %d of %d for user %s (%d changed, %d cascades)",
                                  j, len(resources_to_save), self.committer.username,
+                                 changed,
                                  len(cascade_set))
-                if resource.regenerate(cascade_set, self.object_cache):
+                if resource.regenerate(cascade_set,
+                                       self.object_cache,
+                                       prefetched_data={'inbound_links': inbound_links[resource.href],
+                                                        'identifiers': identifier_cache}):
+                    identifiers_to_drop = set(identifier_cache.reverse[resource.href])
+                    changed += 1
+                    for k in identifiers_to_drop:
+                        del identifier_cache[k]
+                    for k, v in resource.identifier_data:
+                        identifier_cache[(k, v)] = resource.href
                     resource.update_links()
-                    resource.update_identifiers()
                     save_set.add(resource)
             if not cascade_set:
                 break
@@ -186,6 +218,19 @@ class SourceUpdater(object):
                               update_identifiers=False,
                               force_update=True,
                               object_cache=self.object_cache)
+        with save_wrapper():
+            models.Identifier.objects.filter(resource_id__in=[r.href for r in save_set]).delete()
+            try:
+                models.Identifier.objects.bulk_create(
+                    models.Identifier(resource=resource, scheme=scheme, value=value)
+                    for resource in save_set
+                    for scheme, value in resource.identifier_data)
+            except IntegrityError as e:
+                match = re.search(r'DETAIL:  Key \(scheme, value\)=\(([^,]+), ([^)])+\) already exists.', e.args[0])
+                if match:
+                    raise exceptions.DuplicatedIdentifier(match.group(1), match.group(2)) from e
+                else:
+                    raise exceptions.DuplicatedIdentifier() from e
 
         if errors:
             if self.error_handling == 'ignore':

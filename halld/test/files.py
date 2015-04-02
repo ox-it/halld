@@ -1,10 +1,11 @@
 import http.client
 import io
 import json
+import shutil
 import unittest
 
+from django.conf import settings
 from django.core.urlresolvers import reverse
-from django.contrib.auth.models import User
 import mock
 from rest_framework.test import force_authenticate
 import rest_framework.exceptions
@@ -14,10 +15,12 @@ from ..models import Resource, Source
 from ..files.models import ResourceFile
 from ..files import views
 from django.test.client import RequestFactory
+import pkg_resources
 
 class FileTestCase(TestCase):
     def setUp(self):
         super().setUp()
+        shutil.rmtree(settings.MEDIA_ROOT, ignore_errors=True)
         self.file_creation_view = views.FileCreationView.as_view()
         self.file_detail_view = views.FileDetailView.as_view()
         self.test_file = io.BytesIO(b"hello")
@@ -28,6 +31,7 @@ class FileTestCase(TestCase):
 
     def tearDown(self):
         ResourceFile.objects.all().delete()
+        shutil.rmtree(settings.MEDIA_ROOT, ignore_errors=True)
         super(FileTestCase, self).tearDown()
 
     def create_file_resource(self):
@@ -100,7 +104,7 @@ class FileViewTestCase(FileTestCase):
         self.assertEqual(response['Content-Type'], 'text/plain')
         self.assertEqual(b''.join(response.streaming_content), self.test_file.getvalue())
 
-    @mock.patch('halld.files.conf.USE_XSENDFILE', True)
+    @mock.patch('halld.files.apps.HALLDFilesConfig.use_xsendfile', True)
     def testGetXSendFile(self):
         # X-Send-File is a header to tell the web server to send a file served
         # off disk.
@@ -145,14 +149,34 @@ class FileViewTestCase(FileTestCase):
         with self.assertRaises(rest_framework.exceptions.MethodNotAllowed):
             response = self.file_detail_view(request, 'document', identifier)
 
-class FileMetadataTestCase(TestCase):
-    def upload_image(self):
-        request = self.factory.post("/document", {"file": self.test_file})
-        request.user = self.superuser
+class FileMetadataTestCase(FileTestCase):
+    def upload_image(self, name):
+        with pkg_resources.resource_stream('halld.test', name) as test_file:
+            request = self.factory.post("/document",
+                                        test_file.read(),
+                                        content_type='image/jpeg')
+        force_authenticate(request, self.superuser)
         response = self.file_creation_view(request, "document")
         path = response['Location'][17:]
         identifier = path.split('/')[-1]
         return path, identifier
 
-    def testImage(self):
-        pass
+    def testSimpleImage(self):
+        self.upload_image('data/cat.jpg')
+        source = Source.objects.get()
+        self.assertEqual(source.data.get('width'), 250)
+        self.assertEqual(source.data.get('height'), 200)
+        # No EXIF data in this image.
+        self.assertNotIn('exif', source.data)
+
+    def testEXIFImage(self):
+        self.upload_image('data/test.jpg')
+        source = Source.objects.get()
+        self.assertEqual(source.data.get('width'), 100)
+        self.assertEqual(source.data.get('height'), 100)
+        self.assertIn('exif', source.data)
+        self.assertEqual(source.data['exif'].get('Copyright'),
+                         'Copyright Cthulhu')
+
+        resource = Resource.objects.get()
+        self.assertEqual(resource.data.get('imageWidth'), 100)

@@ -67,7 +67,7 @@ class Lookup(FromPointers):
         self.scheme = scheme
         self.pointers = list(map(jsonpointer.JsonPointer, pointers))
 
-    def __call__(self, resource, data, **kwargs):
+    def __call__(self, resource, data, prefetched_data, **kwargs):
         for pointer in self.pointers:
             try:
                 value = data.resolve(pointer)
@@ -78,15 +78,17 @@ class Lookup(FromPointers):
             return
 
         try:
-            identifier = models.Identifier.objects.select_related('resource').get(scheme=self.scheme,
-                                                                                  value=value)
+            if 'identifiers' in prefetched_data:
+                other = prefetched_data['identifiers'][(self.scheme, value)]
+            else:
+                other = models.Identifier.objects.select_related('resource').get(scheme=self.scheme,
+                                                                                 value=value).resource.href
         except models.Identifier.DoesNotExist:
             logger.warning("Can't lookup identifier '%s' in scheme '%s' for resource '%s' and pointer '%s'",
                            value, self.scheme,
                            resource.href, pointer.path)
         else:
-            other = identifier.resource
-            data.set(self.target, other.href)
+            data.set(self.target, other)
 
 class Set(FromPointers):
     """

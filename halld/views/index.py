@@ -23,6 +23,8 @@ class IndexView(HALLDView):
             'findByIdentifier': {'href': reverse('halld:by-identifier')},
             'graph': {'href': reverse('halld:graph') + '/root={root}&linkType={linkType}',
                       'templated': True},
+            'multi': {'href': reverse('halld:resource-multi') + '?href={href}',
+                      'templated': True},
             'changeset': {'href': reverse('halld:changeset-list')},
         }
         links.update({

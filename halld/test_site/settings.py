@@ -26,3 +26,5 @@ REST_FRAMEWORK = {
     'EXCEPTION_HANDLER': 'halld.test_site.exceptions.reraise',
     'TEST_REQUEST_DEFAULT_FORMAT': 'hal-json',
 }
+
+MEDIA_ROOT = 'test-media'

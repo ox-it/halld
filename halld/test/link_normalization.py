@@ -9,7 +9,7 @@ from ..data import Data
 class LinkNormalizationTestCase(TestCase):
     def perform_normalizations(self, resource, data):
         for normalization in resource.get_normalizations():
-            normalization(resource, data)
+            normalization(resource, data, prefetched_data={})
 
     def testInitialNormalization(self):
         resource = models.Resource(type_id='snake',
