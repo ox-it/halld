@@ -1,4 +1,5 @@
 from ..sources import FileMetadataSourceTypeDefinition
+from ....inference import FirstOf
 
 try:
     from PIL.Image import Image
@@ -43,3 +44,13 @@ class ImageMetadataSourceTypeDefinition(FileMetadataSourceTypeDefinition):
         elif etree is not None and isinstance(document, etree._ElementTree):
             return self.get_metadata(document.getroot())
         return metadata or None
+
+    def get_inferences(self):
+        prefix = '/@source/{}/'.format(self.name)
+        return [
+            FirstOf('/imageWidth', prefix + 'width'),
+            FirstOf('/imageHeight', prefix + 'height'),
+            FirstOf('/imageExif', prefix + 'exif'),
+            FirstOf('/imageTitle', prefix + 'title'),
+            FirstOf('/label', prefix + 'title'),
+        ]

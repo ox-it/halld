@@ -177,3 +177,6 @@ class FileMetadataTestCase(FileTestCase):
         self.assertIn('exif', source.data)
         self.assertEqual(source.data['exif'].get('Copyright'),
                          'Copyright Cthulhu')
+
+        resource = Resource.objects.get()
+        self.assertEqual(resource.data.get('imageWidth'), 100)
