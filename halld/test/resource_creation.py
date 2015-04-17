@@ -1,10 +1,7 @@
 import http.client
 import uuid
 
-from django.contrib.auth.models import User
-
-from halld import exceptions, models, views, get_halld_config
-from halld.test_site import definitions
+from halld import exceptions, models, get_halld_config
 
 from .base import TestCase
 
