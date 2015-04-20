@@ -4,6 +4,7 @@ import json
 import threading
 import unittest
 
+from django.test import skipUnlessDBFeature
 from rest_framework.test import force_authenticate
 
 from ..models import Resource
@@ -38,6 +39,7 @@ def run_in_thread(func=None, join=False, args=(), kwargs={}):
     return thread
 
 class ConcurrencyTestCase(TestCase):
+    @skipUnlessDBFeature('atomic_transactions')
     def testParallelUpdate(self):
         identifier = None
         source_types = ('science', 'mythology')
