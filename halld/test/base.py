@@ -8,8 +8,9 @@ from ..models import Changeset, Link, Identifier, Source, Resource
 from .. import views
 from ..util.cache import ObjectCache
 
-class TestCase(django.test.TestCase):
+class TestCase(django.test.TransactionTestCase):
     def setUp(self):
+        super().setUp()
         cache.clear()
         self.factory = APIRequestFactory()
         self.superuser = User.objects.create_superuser(username='superuser',
@@ -25,11 +26,6 @@ class TestCase(django.test.TestCase):
         self.source_detail_view = views.SourceDetailView.as_view()
         self.resource_detail_view = views.ResourceDetailView.as_view()
         self.resource_list_view = views.ResourceListView.as_view()
-
-    def tearDown(self):
-        models = (User, Changeset, Link, Identifier, Source, Resource)
-        for model in models:
-            model.objects.all().delete()
 
     def create_resource(self):
         request = self.factory.post('/snake')

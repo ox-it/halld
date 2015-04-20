@@ -110,10 +110,10 @@ class SourceUpdater(object):
             raise exceptions.NoSuchSourceType(missing_source_types)
 
         if data.get('regenerateAll'):
-            resources = list(models.Resource.objects.all())
-            self.object_cache.resource.add_many(resources)
+            resources = list(models.Resource.objects.select_for_update().all())
         else:
-            resources = filter(None, self.object_cache.resource.get_many(resource_hrefs, ignore_missing=True))
+            resources = list(models.Resource.objects.select_for_update().filter(pk__in=resource_hrefs))
+        self.object_cache.resource.add_many(resources)
         resources = {r.href: r for r in resources}
         missing_hrefs = resource_hrefs - set(resources)
         if missing_hrefs:
