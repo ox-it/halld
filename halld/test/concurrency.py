@@ -74,3 +74,41 @@ class ConcurrencyTestCase(TestCase):
         resource = Resource.objects.get()
         for source_type in source_types:
             self.assertEqual(resource.data.get(source_type), 'hello')
+
+    @unittest.expectedFailure
+    @skipUnlessDBFeature('atomic_transactions')
+    def testMutualCascade(self):
+        identifier_a, identifier_b = None, None
+        source_types = ('science', 'mythology')
+
+        @run_in_thread(join=True)
+        def create_resources():
+            nonlocal identifier_a, identifier_b
+            _, identifier_a = self.create_resource()
+            _, identifier_b = self.create_resource()
+        
+        def update_source(identifier, target_identifier):
+            data = {
+                'updates': [{
+                    'resourceHref': '/snake/' + identifier,
+                    'sourceType': 'science',
+                    'method': 'PUT',
+                    'data': {'eats': '/snake/' + target_identifier},
+                }]
+            }
+            request = self.factory.post('/changeset',
+                                        data=json.dumps(data),
+                                        content_type='application/json')
+            force_authenticate(request, self.superuser)
+            response = self.changeset_list_view(request)
+            self.assertEqual(response.status_code, http.client.NO_CONTENT)
+
+        threads = []
+        for identifier, target_identifier in ((identifier_a, identifier_b), (identifier_a, identifier_b)):
+            threads.append(run_in_thread(update_source, args=(identifier, target_identifier)))
+        for thread in threads:
+            thread.join()
+
+        for resource in Resource.objects.all():
+            self.assertIn('eats', resource.data)
+            self.assertIn('eatenBy', resource.data)
