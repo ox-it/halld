@@ -6,6 +6,9 @@ install:
   - pip install -r requirements-travis.txt
   - pip install coveralls mock
   - python -c "import enum" 2&>1 > /dev/null || pip install enum34
-script: PYTHONPATH=. coverage run --source=. `which django-admin.py` test halld.test --settings=halld.test_site.settings_sqlite3
+env:
+  - DJANGO_SETTINGS_MODULE=halld.test_site.settings_sqlite3
+  - DJANGO_SETTINGS_MODULE=halld.test_site.settings_postgres
+script: PYTHONPATH=. coverage run --source=. `which django-admin.py` test halld.test
 after_script:
   - coveralls
