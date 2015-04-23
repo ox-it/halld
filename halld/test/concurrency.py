@@ -79,7 +79,6 @@ class ConcurrencyTestCase(TestCase):
     @skipUnlessDBFeature('atomic_transactions')
     def testMutualCascade(self):
         identifier_a, identifier_b = None, None
-        source_types = ('science', 'mythology')
 
         @run_in_thread(join=True)
         def create_resources():
