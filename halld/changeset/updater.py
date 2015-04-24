@@ -96,6 +96,11 @@ class SourceUpdater(object):
         modified_sources = self.update_sources(updates, resources, sources, save_wrapper)
         self.save_sources(modified_sources, save_wrapper)
 
+        # Here we regenerate all the resources for the sources we've changed.
+        # These regenerations might cascade to other resources that we didn't
+        # already know about. Those resources may already be locked for update
+        # by another request, which may deadlock causing an OperationalError.
+        # In that case we back off and attempt the regeneration from scratch.
         while True:
             try:
                 with transaction.atomic():
