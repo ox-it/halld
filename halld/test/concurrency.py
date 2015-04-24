@@ -75,7 +75,6 @@ class ConcurrencyTestCase(TestCase):
         for source_type in source_types:
             self.assertEqual(resource.data.get(source_type), 'hello')
 
-    @unittest.expectedFailure
     @skipUnlessDBFeature('atomic_transactions')
     def testMutualCascade(self):
         identifier_a, identifier_b = None, None
