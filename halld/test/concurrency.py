@@ -103,7 +103,7 @@ class ConcurrencyTestCase(TestCase):
             self.assertEqual(response.status_code, http.client.NO_CONTENT)
 
         threads = []
-        for identifier, target_identifier in ((identifier_a, identifier_b), (identifier_a, identifier_b)):
+        for identifier, target_identifier in ((identifier_a, identifier_b), (identifier_b, identifier_a)):
             threads.append(run_in_thread(update_source, args=(identifier, target_identifier)))
         for thread in threads:
             thread.join()
