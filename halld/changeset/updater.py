@@ -6,7 +6,7 @@ import logging
 import re
 from urllib.parse import urljoin
 
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, OperationalError, transaction
 import jsonschema
 
 from .schema import schema
@@ -88,14 +88,25 @@ class SourceUpdater(object):
         save_wrapper = functools.partial(self.save_wrapper, errors, error_handling)
 
         updates = self.get_updates(data)
-        resources = self.get_initial_resources(updates, data.get('regenerateAll'))
+        # This locks the sources for update, blocking if necessary.
         sources = self.get_sources_to_update(updates)
 
+        resources = self.get_initial_resources(updates, data.get('regenerateAll'),
+                                               select_for_update=False)
         modified_sources = self.update_sources(updates, resources, sources, save_wrapper)
         self.save_sources(modified_sources, save_wrapper)
 
-        self.update_cached_source_sets(resources)
-        modified_resources = self.regenerate_resources(resources)
+        while True:
+            try:
+                with transaction.atomic():
+                    resources = self.get_initial_resources(updates, data.get('regenerateAll'),
+                                                           select_for_update=True)
+                    self.update_cached_source_sets(resources)
+                    modified_resources = self.regenerate_resources(resources)
+            except OperationalError:
+                continue
+            break
+
         self.save_resources(modified_resources, save_wrapper)
 
         if errors:
@@ -134,12 +145,15 @@ class SourceUpdater(object):
 
         return updates
 
-    def get_initial_resources(self, updates, regenerate_all):
+    def get_initial_resources(self, updates, regenerate_all, select_for_update):
         resource_hrefs = set(update['resourceHref'] for update in updates)
         if regenerate_all:
-            resources = list(models.Resource.objects.select_for_update().all())
+            resources = models.Resource.objects.all()
         else:
-            resources = list(models.Resource.objects.select_for_update().filter(pk__in=resource_hrefs))
+            resources = models.Resource.objects.filter(pk__in=resource_hrefs)
+        if select_for_update:
+            resources = resources.select_for_update()
+        resources = list(resources)
         self.object_cache.resource.add_many(resources)
         resources = {r.href: r for r in resources}
         missing_hrefs = resource_hrefs - set(resources)
