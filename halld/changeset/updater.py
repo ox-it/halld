@@ -90,10 +90,7 @@ class SourceUpdater(object):
         updates = self.get_updates(data)
         # This locks the sources for update, blocking if necessary.
         sources = self.get_sources_to_update(updates)
-
-        resources = self.get_initial_resources(updates, data.get('regenerateAll'),
-                                               select_for_update=False)
-        modified_sources = self.update_sources(updates, resources, sources, save_wrapper)
+        modified_sources = self.update_sources(updates, sources, save_wrapper)
         self.save_sources(modified_sources, save_wrapper)
 
         # Here we regenerate all the resources for the sources we've changed.
@@ -161,9 +158,6 @@ class SourceUpdater(object):
         resources = list(resources)
         self.object_cache.resource.add_many(resources)
         resources = {r.href: r for r in resources}
-        missing_hrefs = resource_hrefs - set(resources)
-        if missing_hrefs:
-            raise exceptions.SourceDataWithoutResource(missing_hrefs)
         return resources
 
     def get_sources_to_update(self, updates):
@@ -171,7 +165,14 @@ class SourceUpdater(object):
         sources = {s.href: s for s in models.Source.objects.select_for_update().filter(href__in=source_hrefs)}
         return sources
 
-    def update_sources(self, updates, resources, sources, save_wrapper):
+    def update_sources(self, updates, sources, save_wrapper):
+        resource_hrefs = set(update['resourceHref'] for update in updates)
+        resource_types = models.Resource.objects.filter(href__in=resource_hrefs).values('href', 'type_id')
+        resource_types = {r['href']: get_halld_config().resource_types[r['type_id']] for r in resource_types}
+        missing_hrefs = resource_hrefs - set(resource_types)
+        if missing_hrefs:
+            raise exceptions.SourceDataWithoutResource(missing_hrefs)
+
         results = collections.defaultdict(set)
         modified_sources = set()
         for i, update in enumerate(updates, 1):
@@ -190,13 +191,13 @@ class SourceUpdater(object):
                     continue
                 if method.require_source_exists:
                     raise exceptions.NoSuchSource(update['href']) from e
-                resource = resources[update['resourceHref']]
-                if update['sourceType'] not in resource.get_type().source_types:
+                resource_type = resource_types[update['resourceHref']]
+                if update['sourceType'] not in resource_type.source_types:
                     with save_wrapper(with_transaction=False):
-                        raise exceptions.IncompatibleSourceType(resource.type_id,
+                        raise exceptions.IncompatibleSourceType(resource_type.name,
                                                                 update['sourceType']) from e
                     continue
-                source = models.Source(resource=resource,
+                source = models.Source(resource_id=update['resourceHref'],
                                        type_id=update['sourceType'])
                 sources[update['href']] = source
             result = method(self.author, self.committer, source)
