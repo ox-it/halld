@@ -51,6 +51,28 @@ class ImageMetadataSourceTypeDefinition(FileMetadataSourceTypeDefinition):
             FirstOf('/imageWidth', prefix + 'width'),
             FirstOf('/imageHeight', prefix + 'height'),
             FirstOf('/imageExif', prefix + 'exif'),
+            FirstOf('/imageTitle', prefix + 'exif/ImageDescription'),
             FirstOf('/imageTitle', prefix + 'title'),
             FirstOf('/label', prefix + 'title'),
+            FirstOf('/copyright', '/imageExif/Copyright'),
+            self.infer_coordinates,
         ]
+
+    def infer_coordinates(self, data, **kwargs):
+        gps_info = data.resolve('/imageExif/GPSInfo', {})
+        gps_info = {PIL.ExifTags.GPSTAGS[k]: (v.decode('utf-8') if isinstance(v, bytes) else v)
+                    for k, v in gps_info.items()
+                    if k in PIL.ExifTags.GPSTAGS}
+        if not all(k in gps_info for k in ('GPSLatitude', 'GPSLatitudeRef',
+                                           'GPSLongitude', 'GPSLongitudeRef')):
+            return
+        data.set('/@point', {'lat': self.parse_exif_gps_coord(gps_info['GPSLatitude'],
+                                                              gps_info['GPSLatitudeRef']),
+                             'lon': self.parse_exif_gps_coord(gps_info['GPSLongitude'],
+                                                              gps_info['GPSLongitudeRef'])})
+
+    def parse_exif_gps_coord(self, value, ref):
+        d, m, s = value
+        # truediv, because we're >= Py3
+        d, m, s = d[0] / d[1], m[0] / m[1], s[0] / s[1]
+        return (d + m / 60 + s / 3600) * (1 if ref in ('N', 'W') else -1)
