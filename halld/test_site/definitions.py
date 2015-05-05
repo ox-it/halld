@@ -13,7 +13,8 @@ class SnakeResourceTypeDefinition(ResourceTypeDefinition):
 
     def get_inferences(self):
         return [
-            FirstOf('', '/@source/science', update=True)
+            FirstOf('', '/@source/science', update=True),
+            FirstOf('', '/@source/mythology', update=True),
         ]
 
 class PenguinResourceTypeDefinition(ResourceTypeDefinition):

@@ -6,7 +6,7 @@ import logging
 import re
 from urllib.parse import urljoin
 
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, OperationalError, transaction
 import jsonschema
 
 from .schema import schema
@@ -74,19 +74,57 @@ class SourceUpdater(object):
         """
         Updates sources and fires events.
         """
-        from ..models import Source
+        # This all happens in stages. First we update our sources and save
+        # them, then regenerate the resources until they settle down, then
+        # save the resources
 
         if data.get('regenerateAll') and not self.committer.is_superuser:
             raise exceptions.CantRegenerateAll()
         elif data.get('regenerateAll'):
             logger.info("Regenerating all for user %s", self.committer.username)
 
-        updates = data.get('updates', [])
-        logger.info("Performing %d updates for user %s", len(updates), self.committer.username)
         error_handling = data.get('error-handling', "fail-first")
         errors = []
         save_wrapper = functools.partial(self.save_wrapper, errors, error_handling)
 
+        updates = self.get_updates(data)
+        # This locks the sources for update, blocking if necessary.
+        sources = self.get_sources_to_update(updates)
+        modified_sources = self.update_sources(updates, sources, save_wrapper)
+        self.save_sources(modified_sources, save_wrapper)
+
+        # Here we regenerate all the resources for the sources we've changed.
+        # These regenerations might cascade to other resources that we didn't
+        # already know about. Those resources may already be locked for update
+        # by another request, which may deadlock causing an OperationalError.
+        # In that case we back off and attempt the regeneration from scratch.
+        while True:
+            try:
+                with transaction.atomic():
+                    resources = self.get_initial_resources(updates, data.get('regenerateAll'),
+                                                           select_for_update=True)
+                    self.update_cached_source_sets(resources)
+                    modified_resources = self.regenerate_resources(resources)
+            except OperationalError:
+                continue
+            break
+
+        self.save_resources(modified_resources, save_wrapper)
+
+        if errors:
+            if self.error_handling == 'ignore':
+                raise exceptions.MultipleErrors(errors)
+            else:
+                return exceptions.MultipleErrors(errors)
+
+    def get_updates(self, data):
+        """
+        Gets updates with added missing resource_href and source_type data.
+
+        Raises NoSuchSourceType if an update is for a source_type we don't support.
+        """
+        updates = data.get('updates', [])
+        logger.info("Performing %d updates for user %s", len(updates), self.committer.username)
         bad_hrefs = set()
         for update in updates:
             if 'href' in update:
@@ -102,28 +140,41 @@ class SourceUpdater(object):
         if bad_hrefs:
             raise exceptions.BadHrefs(bad_hrefs)
 
-        resource_hrefs = set(update['resourceHref'] for update in updates)
         source_types = set(update['sourceType'] for update in updates)
-
         missing_source_types = source_types - set(get_halld_config().source_types)
         if missing_source_types:
             raise exceptions.NoSuchSourceType(missing_source_types)
 
-        if data.get('regenerateAll'):
-            resources = list(models.Resource.objects.all())
-            self.object_cache.resource.add_many(resources)
+        return updates
+
+    def get_initial_resources(self, updates, regenerate_all, select_for_update):
+        resource_hrefs = set(update['resourceHref'] for update in updates)
+        if regenerate_all:
+            resources = models.Resource.objects.all()
         else:
-            resources = filter(None, self.object_cache.resource.get_many(resource_hrefs, ignore_missing=True))
+            resources = models.Resource.objects.filter(pk__in=resource_hrefs)
+        if select_for_update:
+            resources = resources.select_for_update()
+        resources = list(resources)
+        self.object_cache.resource.add_many(resources)
         resources = {r.href: r for r in resources}
-        missing_hrefs = resource_hrefs - set(resources)
+        return resources
+
+    def get_sources_to_update(self, updates):
+        source_hrefs = set(update['href'] for update in updates)
+        sources = {s.href: s for s in models.Source.objects.select_for_update().filter(href__in=source_hrefs)}
+        return sources
+
+    def update_sources(self, updates, sources, save_wrapper):
+        resource_hrefs = set(update['resourceHref'] for update in updates)
+        resource_types = models.Resource.objects.filter(href__in=resource_hrefs).values('href', 'type_id')
+        resource_types = {r['href']: get_halld_config().resource_types[r['type_id']] for r in resource_types}
+        missing_hrefs = resource_hrefs - set(resource_types)
         if missing_hrefs:
             raise exceptions.SourceDataWithoutResource(missing_hrefs)
 
-        source_hrefs = set(update['href'] for update in updates)
-        sources = {s.href: s for s in Source.objects.select_for_update().filter(href__in=source_hrefs)}
-
         results = collections.defaultdict(set)
-        modified = set()
+        modified_sources = set()
         for i, update in enumerate(updates, 1):
             if i % 100 == 0:
                 logger.debug("Updating source %d of %d for user %s",
@@ -140,37 +191,40 @@ class SourceUpdater(object):
                     continue
                 if method.require_source_exists:
                     raise exceptions.NoSuchSource(update['href']) from e
-                resource = resources[update['resourceHref']]
-                if update['sourceType'] not in resource.get_type().source_types:
+                resource_type = resource_types[update['resourceHref']]
+                if update['sourceType'] not in resource_type.source_types:
                     with save_wrapper(with_transaction=False):
-                        raise exceptions.IncompatibleSourceType(resource.type_id,
+                        raise exceptions.IncompatibleSourceType(resource_type.name,
                                                                 update['sourceType']) from e
                     continue
-                source = Source(resource=resource,
-                                type_id=update['sourceType'])
+                source = models.Source(resource_id=update['resourceHref'],
+                                       type_id=update['sourceType'])
                 sources[update['href']] = source
             result = method(self.author, self.committer, source)
             if result:
                 source.author = self.author
                 source.committer = self.committer
-                modified.add(source)
+                modified_sources.add(source)
             results[result].add(source)
+        return modified_sources
 
-        for i, source in enumerate(modified, 1):
+    def save_sources(self, sources, save_wrapper):
+        for i, source in enumerate(sources, 1):
             if i % 100 == 0:
                 logger.debug("Saving source %d of %d for user %s",
-                             i, len(modified), self.committer.username)
+                             i, len(sources), self.committer.username)
             with save_wrapper():
                 source.save(cascade_to_resource=False)
 
-        save_set = set()
-
+    def update_cached_source_sets(self, resources):
         sources_by_resource = collections.defaultdict(set)
-        for source in Source.objects.filter(resource__in=set(resources)):
+        for source in models.Source.objects.filter(resource__in=set(resources)):
             sources_by_resource[source.resource_id].add(source)
         for href, sources in sources_by_resource.items():
             resources[href].cached_source_set = sources
 
+    def regenerate_resources(self, resources):
+        modified_resources = set()
         identifier_cache = IdentifierCache()
         resources_to_save = set(resources.values())
         for i in range(1, self.max_cascades + 1):
@@ -200,15 +254,19 @@ class SourceUpdater(object):
                     for k, v in resource.identifier_data:
                         identifier_cache[(k, v)] = resource.href
                     resource.update_links()
-                    save_set.add(resource)
+                    modified_resources.add(resource)
             if not cascade_set:
                 break
+            new_resources = models.Resource.objects.select_for_update().filter(href__in=cascade_set-set(resources))
+            self.object_cache.resource.add_many(new_resources)
             resources_to_save = set(self.object_cache.resource.get_many(cascade_set))
         else:
             logger.warning("Still %d resources to cascade to after %d cascades",
                            len(cascade_set), self.max_cascades)
+        return modified_resources
 
-        for i, resource in enumerate(save_set, 1):
+    def save_resources(self, resources, save_wrapper):
+        for i, resource in enumerate(resources, 1):
             if i % 100 == 0:
                 logger.debug("Saving resource %d of %d for user %s",
                              i, len(resources), self.committer.username)
@@ -219,21 +277,24 @@ class SourceUpdater(object):
                               force_update=True,
                               object_cache=self.object_cache)
         with save_wrapper():
-            models.Identifier.objects.filter(resource_id__in=[r.href for r in save_set]).delete()
+            models.Identifier.objects.filter(resource_id__in=[r.href for r in resources]).delete()
             try:
                 models.Identifier.objects.bulk_create(
                     models.Identifier(resource=resource, scheme=scheme, value=value)
-                    for resource in save_set
+                    for resource in resources
                     for scheme, value in resource.identifier_data)
             except IntegrityError as e:
-                match = re.search(r'DETAIL:  Key \(scheme, value\)=\(([^,]+), ([^)])+\) already exists.', e.args[0])
+                match = re.search(r'DETAIL:  Key \(scheme, value\)=\(([^,]+), ([^)]+)\) already exists.', e.args[0])
                 if match:
-                    raise exceptions.DuplicatedIdentifier(match.group(1), match.group(2)) from e
+                    for resource in resources:
+                        for scheme, value in resource.identifier_data:
+                            if match.group(1) == scheme and match.group(2) == value:
+                                break
+                        else:
+                            continue
+                        break
+                    else:
+                        raise AssertionError("Couldn't find conflicting resource")
+                    raise exceptions.DuplicatedIdentifier(match.group(1), match.group(2), resource=resource) from e
                 else:
                     raise exceptions.DuplicatedIdentifier() from e
-
-        if errors:
-            if self.error_handling == 'ignore':
-                raise exceptions.MultipleErrors(errors)
-            else:
-                return exceptions.MultipleErrors(errors)

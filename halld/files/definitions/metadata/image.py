@@ -1,3 +1,5 @@
+import base64
+
 from ..sources import FileMetadataSourceTypeDefinition
 from ....inference import FirstOf
 
@@ -26,9 +28,14 @@ class ImageMetadataSourceTypeDefinition(FileMetadataSourceTypeDefinition):
             if hasattr(document, '_getexif'):
                 exif = document._getexif()
                 if exif:
-                    metadata['exif'] = {PIL.ExifTags.TAGS[k]: (v.decode('utf-8') if isinstance(v, bytes) else v)
+                    metadata['exif'] = {PIL.ExifTags.TAGS[k]: (base64.b64encode(v).decode('utf-8') if isinstance(v, bytes) else v)
                                         for k, v in exif.items()
                                         if k in PIL.ExifTags.TAGS}
+                    if 'GPSInfo' in metadata['exif']:
+                        metadata['exif']['GPSInfo'] = {PIL.ExifTags.GPSTAGS[k]: (base64.b64encode(v).decode('utf-8') if isinstance(v, bytes) else v)
+                                                       for k, v in metadata['exif']['GPSInfo'].items()
+                                                       if k in PIL.ExifTags.GPSTAGS}
+
         elif etree is not None and isinstance(document, etree._Element):
             if document.xpath('self::svg:svg[@width and @height]', namespaces=namespaces):
                 w, h = document.attrib['width'], document.attrib['height']
@@ -51,6 +58,25 @@ class ImageMetadataSourceTypeDefinition(FileMetadataSourceTypeDefinition):
             FirstOf('/imageWidth', prefix + 'width'),
             FirstOf('/imageHeight', prefix + 'height'),
             FirstOf('/imageExif', prefix + 'exif'),
+            FirstOf('/imageTitle', prefix + 'exif/ImageDescription'),
             FirstOf('/imageTitle', prefix + 'title'),
             FirstOf('/label', prefix + 'title'),
+            FirstOf('/copyright', '/imageExif/Copyright'),
+            self.infer_coordinates,
         ]
+
+    def infer_coordinates(self, data, **kwargs):
+        gps_info = data.resolve('/imageExif/GPSInfo', {})
+        if not all(k in gps_info for k in ('GPSLatitude', 'GPSLatitudeRef',
+                                           'GPSLongitude', 'GPSLongitudeRef')):
+            return
+        data.set('/@point', {'lat': self.parse_exif_gps_coord(gps_info['GPSLatitude'],
+                                                              gps_info['GPSLatitudeRef']),
+                             'lon': self.parse_exif_gps_coord(gps_info['GPSLongitude'],
+                                                              gps_info['GPSLongitudeRef'])})
+
+    def parse_exif_gps_coord(self, value, ref):
+        d, m, s = value
+        # truediv, because we're >= Py3
+        d, m, s = d[0] / d[1], m[0] / m[1], s[0] / s[1]
+        return (d + m / 60 + s / 3600) * (1 if ref in ('N', 'E') else -1)

@@ -28,11 +28,14 @@ class FileView(HALLDView):
 
 
     def process_file(self, request, resource_file):
+        expect_continue = request.META.get('HTTP_EXPECT', '').lower() == '100-continue'
         try:
             content_type = request.META['CONTENT_TYPE'].split(';')[0].strip()
         except KeyError:
             raise halld.exceptions.MissingContentType
         if content_type == 'multipart/form-data':
+            if expect_continue:
+                raise exceptions.Continue
             form = UploadFileForm(request.POST, request.FILES, instance=resource_file)
             if form.is_valid():
                 form.save()
@@ -41,8 +44,12 @@ class FileView(HALLDView):
         elif content_type == 'application/x-www-form-urlencoded':
             raise exceptions.NoFileUploaded
         else:
+            if expect_continue:
+                raise exceptions.Continue
             request.META['HTTP_CONTENT_DISPOSITION'] = 'attachment; filename="file"'
             self.process_file_from_request_body(request, resource_file, content_type)
+        resource_file.update_sha256()
+        resource_file.save()
         self.update_file_metadata(request, resource_file)
 
     def process_file_from_request_body(self, request, resource_file, content_type):
@@ -123,14 +130,17 @@ class FileDetailView(FileView):
         self.resource_file = ResourceFile.objects.get(resource=self.resource)
 
     def get(self, request, resource_type, identifier):
+        content_type = self.resource_file.content_type
         if get_halld_files_config().use_xsendfile:
-            response = HttpResponse(content_type=self.resource_file.content_type)
+            response = HttpResponse(content_type=content_type)
             response['X-Send-File'] = self.resource_file.file.path
         else:
-            f = open(self.resource_file.file.path, 'r')
+            f = open(self.resource_file.file.path, 'rb')
             response = StreamingHttpResponse(f,
-                                             content_type=self.resource_file.content_type)
+                                             content_type=content_type)
             response['Content-Length'] = os.fstat(f.fileno()).st_size
+        response['X-Content-Type-Options'] = 'nosniff'
+        response['Content-Security-Policy'] = 'sandbox'
         return response
     
     @transaction.atomic

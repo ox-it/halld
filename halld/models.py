@@ -305,7 +305,7 @@ class Resource(models.Model, StaleFieldsMixin):
                                               scheme=scheme,
                                               value=value)
                 except IntegrityError as e:
-                    raise exceptions.DuplicatedIdentifier(scheme, value) from e
+                    raise exceptions.DuplicatedIdentifier(scheme, value, self) from e
 
     def get_absolute_uri(self, data=None):
         data = data or self.data
