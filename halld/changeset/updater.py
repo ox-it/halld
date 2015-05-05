@@ -149,6 +149,7 @@ class SourceUpdater(object):
 
     def get_initial_resources(self, updates, regenerate_all, select_for_update):
         resource_hrefs = set(update['resourceHref'] for update in updates)
+        resource_hrefs.update(update['targetResourceHref'] for update in updates if update['method'] == 'MOVE')
         if regenerate_all:
             resources = models.Resource.objects.all()
         else:

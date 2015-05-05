@@ -109,6 +109,9 @@ class SourceListView(ChangesetView):
         return HttpResponse(status=http.client.NO_CONTENT)
 
 class SourceDetailView(VersioningMixin, ChangesetView):
+    http_method_names = {'get', 'put', 'patch', 'delete',
+                         'move', 'head', 'options'}
+
     def get(self, request, resource_type, identifier, source_type, **kwargs):
         try:
             source = Source.objects.get(href=request.build_absolute_uri())
@@ -156,4 +159,12 @@ class SourceDetailView(VersioningMixin, ChangesetView):
 
     @transaction.atomic
     def move(self, request, resource_type, identifier, source_type, **kwargs):
-        raise NotImplementedError
+        try:
+            target_resource_href = request.META['HTTP_LOCATION']
+        except KeyError:
+            raise exceptions.MoveMissingLocationHeader
+        changeset = self.get_new_changeset({'updates': [{'href': request.build_absolute_uri(),
+                                                         'method': 'MOVE',
+                                                         'targetResourceHref': target_resource_href}]})
+        changeset.perform()
+        return HttpResponse(status=http.client.NO_CONTENT)
