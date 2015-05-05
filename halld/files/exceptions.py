@@ -19,3 +19,8 @@ class UnparsableFile(HALLDException):
     slug = 'unparsable-file'
     status_code = http.client.BAD_REQUEST
     description = "Couldn't parse uploaded file"
+
+class Continue(HALLDException):
+    slug = 'continue'
+    status_code = http.client.CONTINUE
+    description = "Go right ahead."

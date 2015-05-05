@@ -28,11 +28,14 @@ class FileView(HALLDView):
 
 
     def process_file(self, request, resource_file):
+        expect_continue = request.META.get('HTTP_EXPECT', '').lower() == '100-continue'
         try:
             content_type = request.META['CONTENT_TYPE'].split(';')[0].strip()
         except KeyError:
             raise halld.exceptions.MissingContentType
         if content_type == 'multipart/form-data':
+            if expect_continue:
+                raise exceptions.Continue
             form = UploadFileForm(request.POST, request.FILES, instance=resource_file)
             if form.is_valid():
                 form.save()
@@ -41,6 +44,8 @@ class FileView(HALLDView):
         elif content_type == 'application/x-www-form-urlencoded':
             raise exceptions.NoFileUploaded
         else:
+            if expect_continue:
+                raise exceptions.Continue
             request.META['HTTP_CONTENT_DISPOSITION'] = 'attachment; filename="file"'
             self.process_file_from_request_body(request, resource_file, content_type)
         resource_file.update_sha256()
