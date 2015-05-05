@@ -43,6 +43,8 @@ class FileView(HALLDView):
         else:
             request.META['HTTP_CONTENT_DISPOSITION'] = 'attachment; filename="file"'
             self.process_file_from_request_body(request, resource_file, content_type)
+        resource_file.update_sha256()
+        resource_file.save()
         self.update_file_metadata(request, resource_file)
 
     def process_file_from_request_body(self, request, resource_file, content_type):

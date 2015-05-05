@@ -1,6 +1,7 @@
 import abc
 
 from halld.definitions import ResourceTypeDefinition
+from halld.files.models import ResourceFile
 
 class FileResourceTypeDefinition(ResourceTypeDefinition):
     name = 'file'
@@ -11,3 +12,14 @@ class FileResourceTypeDefinition(ResourceTypeDefinition):
     @abc.abstractmethod
     def parse_file(self, f, content_type):
         return None
+
+    def get_inferences(self):
+        return super().get_inferences() + [
+            self.add_sha256,
+        ]
+
+    def add_sha256(self, resource, data, **kwargs):
+        try:
+            data.set('/sha256', resource.file.get().sha256)
+        except ResourceFile.DoesNotExist:
+            pass
