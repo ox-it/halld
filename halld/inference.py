@@ -1,5 +1,7 @@
 import abc
 import collections
+import itertools
+import json
 import logging
 
 import jsonpointer
@@ -105,16 +107,23 @@ class Set(FromPointers):
         super(Set, self).__init__(target, *pointers)
 
     def __call__(self, resource, data, **kwargs):
-        result = set()
+        result = []
         for pointer in self.pointers:
             value = data.resolve(pointer, [])
             if isinstance(value, collections.defaultdict):
                 continue
             if not isinstance(value, (list, set)):
                 value = {value}
-            result.update(value)
+            result.extend(value)
+        # Remove duplicates. See http://stackoverflow.com/questions/10784390
+        # We use the JSON encoding to support sorting all types in a
+        # deterministic manner.
+        result = [k for k,v in itertools.groupby(sorted(result, key=self.sort_key))]
         if result:
-            data.set(self.target, sorted(result))
+            data.set(self.target, result)
+
+    def sort_key(self, obj):
+        return json.dumps(obj, sort_keys=True)
 
 class ResourceMeta(Inference):
     inferred_keys = ('catalogRecord','inCatalog')
