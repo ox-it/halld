@@ -284,8 +284,17 @@ class SourceUpdater(object):
                     for resource in resources
                     for scheme, value in resource.identifier_data)
             except IntegrityError as e:
-                match = re.search(r'DETAIL:  Key \(scheme, value\)=\(([^,]+), ([^)])+\) already exists.', e.args[0])
+                match = re.search(r'DETAIL:  Key \(scheme, value\)=\(([^,]+), ([^)]+)\) already exists.', e.args[0])
                 if match:
-                    raise exceptions.DuplicatedIdentifier(match.group(1), match.group(2)) from e
+                    for resource in resources:
+                        for scheme, value in resource.identifier_data:
+                            if match.group(1) == scheme and match.group(2) == value:
+                                break
+                        else:
+                            continue
+                        break
+                    else:
+                        raise AssertionError("Couldn't find conflicting resource")
+                    raise exceptions.DuplicatedIdentifier(match.group(1), match.group(2), resource=resource) from e
                 else:
                     raise exceptions.DuplicatedIdentifier() from e

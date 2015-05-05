@@ -217,25 +217,33 @@ class DuplicatedIdentifier(HALLDException):
     description = 'The data you supplied implied an identifier that is already assigned to another resource.'
     status_code = http.client.CONFLICT
 
-    def __init__(self, scheme=None, value=None):
+    def __init__(self, scheme=None, value=None, resource=None):
         self.scheme, self.value = scheme, value
+        self.resource = resource
 
     @property
     def detail(self):
         data = super().detail
+        links = {}
+        if self.resource:
+            links['resource'] = {'href': self.resource.href}
         if self.scheme and self.value:
             data['scheme'] = self.scheme
             data['value'] = self.value
             try:
                 from .models import Identifier
-                data['_links'] = {'resource': Identifier.objects.get(scheme=self.scheme,
-                                                                    value=self.value).resource_id}
+                links['conflictsWith'] = {'href': Identifier.objects.get(scheme=self.scheme,
+                                                                         value=self.value).resource_id}
             except Identifier.DoesNotExist:
                 # User was likely uploading two things with the same identifier,
                 # as opposed to there already being something we knew about with
                 # the provided identifier. There's no way we're going to be able
                 # to work out the resource href for the thing it clashed with.
                 pass
+        if links:
+            if '_links' not in data:
+                data['_links'] = {}
+            data['_links'].update(links)
         return data
 
 class ResourceAlreadyExists(HALLDException):
