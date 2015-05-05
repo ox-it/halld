@@ -130,14 +130,17 @@ class FileDetailView(FileView):
         self.resource_file = ResourceFile.objects.get(resource=self.resource)
 
     def get(self, request, resource_type, identifier):
+        content_type = self.resource_file.content_type
         if get_halld_files_config().use_xsendfile:
-            response = HttpResponse(content_type=self.resource_file.content_type)
+            response = HttpResponse(content_type=content_type)
             response['X-Send-File'] = self.resource_file.file.path
         else:
-            f = open(self.resource_file.file.path, 'r')
+            f = open(self.resource_file.file.path, 'rb')
             response = StreamingHttpResponse(f,
-                                             content_type=self.resource_file.content_type)
+                                             content_type=content_type)
             response['Content-Length'] = os.fstat(f.fileno()).st_size
+        response['X-Content-Type-Options'] = 'nosniff'
+        response['Content-Security-Policy'] = 'sandbox'
         return response
     
     @transaction.atomic
