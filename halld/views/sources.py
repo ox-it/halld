@@ -19,11 +19,6 @@ import jsonschema
 
 __all__ = ['SourceListView', 'SourceDetailView']
 
-class BulkSourceUpdateView(ChangesetView):
-    @method_decorator(login_required)
-    def post(self):
-        raise NotImplementedError
-
 class SourceListView(ChangesetView):
     def initial(self, request, resource_type, identifier):
         super().initial(request, resource_type, identifier)
