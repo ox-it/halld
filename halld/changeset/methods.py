@@ -111,4 +111,9 @@ class MoveUpdate(Update):
         return cls(data['targetResourceHref'])
 
     def __call__(self, author, committer, source):
-        raise NotImplementedError
+        if not committer.has_perm('halld.change_source', source):
+            raise exceptions.Forbidden(committer)
+        if source.resource_id == self.target_resource_href:
+            return
+        source.resource_id = self.target_resource_href
+        return UpdateResult.moved

@@ -265,6 +265,30 @@ class SourceTestCase(TestCase):
         source.save()
         self.assertEqual(resource.extant, False)
 
+    def testMoveSource(self):
+        original = models.Resource.create(self.superuser, 'snake')
+        target = models.Resource.create(self.superuser, 'snake')
+        source = models.Source.objects.create(resource=original,
+                                              type_id='science',
+                                              author=self.superuser,
+                                              committer=self.superuser,
+                                              data={'code': 'test'})
+        self.assertEqual(original.data.get('code'), 'test')
+        self.assertEqual(target.data.get('code'), None)
+
+        request = self.factory.generic('MOVE',
+                                       source.href,
+                                       HTTP_LOCATION=target.href)
+        force_authenticate(request, self.superuser)
+        response = self.source_detail_view(request, 'snake', original.identifier, 'science')
+        self.assertEqual(response.status_code, http.client.NO_CONTENT)
+
+        original = models.Resource.objects.get(href=original.href)
+        target = models.Resource.objects.get(href=target.href)
+
+        self.assertEqual(original.data.get('code'), None)
+        self.assertEqual(target.data.get('code'), 'test')
+
 class AtomicTestCase(TestCase):
     def testDuplicatedIdentifier(self):
         resource = models.Resource.objects.create(type_id='snake', identifier='python', creator=self.superuser)
